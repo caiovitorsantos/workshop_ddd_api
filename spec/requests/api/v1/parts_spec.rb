@@ -42,6 +42,8 @@ RSpec.describe "api/v1/parts", type: :request do
           payload = JSON.parse(response.body)
           expect(payload["sku"]).to eq("FIL-OL01") # normalised by the aggregate
           expect(payload["below_minimum"]).to be(false)
+          expect(payload["quantity_reserved"]).to eq(0)
+          expect(payload["available"]).to eq(25)
         end
       end
 

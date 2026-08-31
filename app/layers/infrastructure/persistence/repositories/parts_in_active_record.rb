@@ -13,6 +13,7 @@ module Infrastructure
             description: part.description,
             price_cents: part.unit_price.cents,
             quantity_on_hand: part.quantity_on_hand,
+            quantity_reserved: part.quantity_reserved,
             minimum_stock: part.minimum_stock
           )
           record.save!
@@ -64,6 +65,7 @@ module Infrastructure
             description: record.description,
             unit_price: Domain::Shared::Money.new(cents: record.price_cents),
             quantity_on_hand: record.quantity_on_hand,
+            quantity_reserved: record.quantity_reserved,
             minimum_stock: record.minimum_stock
           )
         end

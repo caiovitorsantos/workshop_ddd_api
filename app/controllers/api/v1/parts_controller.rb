@@ -94,6 +94,8 @@ module Api
           description: part.description,
           unit_price: part.unit_price.amount.to_s("F"),
           quantity_on_hand: part.quantity_on_hand,
+          quantity_reserved: part.quantity_reserved,
+          available: part.available_quantity,
           minimum_stock: part.minimum_stock,
           below_minimum: part.below_minimum?
         }
