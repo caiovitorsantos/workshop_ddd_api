@@ -2,13 +2,16 @@ module Application
   module Workshop
     # Use case: add a part to an order being assembled.
     #
-    # **No stock is deducted here.** Putting a part on a quote is a statement of
-    # intent, and quotes get rejected. The shelf is only touched when the
-    # customer approves — see ApproveQuote.
+    # This is where the first phase of the two-phase stock flow happens: the
+    # part is **reserved**. Nothing leaves the shelf — quotes get rejected — but
+    # the held amount stops another order from quoting stock already spoken for.
+    # Approval turns the reservation into a deduction (`ApproveQuote`); a
+    # rejected or cancelled order releases it (`RejectQuote`,
+    # `CancelServiceOrder`).
     #
-    # Availability is checked anyway, as a courtesy: quoting a part the workshop
-    # does not have and cannot get wastes everyone's time. It is a *check*, not
-    # a reservation, and the real guarantee happens at approval under a lock.
+    # Reservation and the order line are one transaction across two bounded
+    # contexts, like approval: a rollback has to undo both, or the order would
+    # quote a part the shelf is not holding.
     class AddPartToOrder < Application::Shared::UseCase
       def initialize(orders:, parts:, id:, part_id:, quantity:)
         @orders = orders
@@ -23,25 +26,24 @@ module Application
       attr_reader :orders, :parts, :id, :part_id, :quantity
 
       def perform
-        order = orders.find(id)
-        raise Domain::Shared::Errors::NotFound, "service order #{id} not found" if order.nil?
+        ActiveRecord::Base.transaction do
+          order = orders.find(id)
+          raise Domain::Shared::Errors::NotFound, "service order #{id} not found" if order.nil?
 
-        part = parts.find(part_id)
-        raise Domain::Shared::Errors::NotFound, "part #{part_id} not found" if part.nil?
+          part = parts.find_for_update(part_id)
+          raise Domain::Shared::Errors::NotFound, "part #{part_id} not found" if part.nil?
 
-        unless part.available?(quantity)
-          raise Domain::Shared::Errors::BusinessRuleViolation,
-                "only #{part.quantity_on_hand} of #{part.sku} in stock, #{quantity} requested"
+          # Order first: it refuses (InvalidTransition) unless the order is still
+          # a draft, and that check must happen before any stock is held.
+          order.add_part(
+            part_id: part.id, description: part.description,
+            unit_price: part.unit_price, quantity: quantity
+          )
+          part.reserve!(quantity, service_order_id: order.id)
+
+          parts.save(part)
+          orders.save(order)
         end
-
-        order.add_part(
-          part_id: part.id,
-          description: part.description,
-          unit_price: part.unit_price,
-          quantity: quantity
-        )
-
-        orders.save(order)
       end
     end
   end

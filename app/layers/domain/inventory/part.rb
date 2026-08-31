@@ -121,27 +121,6 @@ module Domain
         self
       end
 
-      # Command: consume parts for an approved service order.
-      #
-      # Superseded by the two-phase reserve! / consume_reserved! pair; kept until
-      # every caller has migrated.
-      def deduct!(quantity, service_order_id: nil)
-        quantity = quantity.to_i
-        require_positive!(quantity)
-
-        unless quantity_on_hand >= quantity
-          raise Errors::BusinessRuleViolation,
-                "insufficient stock for #{sku}: #{quantity_on_hand} on hand, #{quantity} requested"
-        end
-
-        was_below_minimum = below_minimum?
-        @quantity_on_hand -= quantity
-
-        record_event(Events::StockDeducted, quantity: quantity, service_order_id: service_order_id)
-        announce_crossing_the_minimum(was_below_minimum)
-        self
-      end
-
       # Command: goods received, or parts returned by a cancelled order.
       def restock!(quantity, service_order_id: nil)
         quantity = quantity.to_i

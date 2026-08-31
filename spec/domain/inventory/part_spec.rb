@@ -101,26 +101,6 @@ RSpec.describe Domain::Inventory::Part do
     end
   end
 
-  describe "#deduct!" do
-    it "reduces the balance on hand" do
-      expect(build.deduct!(3).quantity_on_hand).to eq(7)
-    end
-
-    it "refuses to go negative — the invariant this context exists to protect" do
-      expect { build(quantity_on_hand: 2).deduct!(3) }
-        .to raise_error(Domain::Shared::Errors::BusinessRuleViolation, /insufficient stock/)
-    end
-
-    it "allows draining the shelf to exactly zero" do
-      expect(build(quantity_on_hand: 3).deduct!(3).quantity_on_hand).to eq(0)
-    end
-
-    it "rejects a non-positive movement" do
-      expect { build.deduct!(0) }
-        .to raise_error(Domain::Shared::Errors::InvalidValue, /must be positive/)
-    end
-  end
-
   describe "#restock!" do
     it "increases the balance on hand" do
       expect(build.restock!(5).quantity_on_hand).to eq(15)

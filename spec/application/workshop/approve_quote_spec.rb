@@ -5,6 +5,11 @@ require "rails_helper"
 # It runs against the real repositories and a real PostgreSQL on purpose: what
 # is under test is a *transaction spanning two bounded contexts*, and a fake
 # repository cannot prove that a rollback undid both halves.
+#
+# In the two-phase stock flow the parts are already *reserved* by the time an
+# order reaches approval (see AddPartToOrder), so approval cannot fail for want
+# of stock — that check moved to the moment the part was added. What approval
+# does is turn each reservation into a real deduction.
 RSpec.describe Application::Workshop::ApproveQuote do
   def approve(order)
     described_class.call(orders: orders, parts: parts, id: order.id)
@@ -22,6 +27,17 @@ RSpec.describe Application::Workshop::ApproveQuote do
       expect(parts.find(part.id).quantity_on_hand).to eq(7)
     end
 
+    it "clears the reservation as it deducts — nothing stays held" do
+      part  = create_part(on_hand: 10)
+      order = order_awaiting_approval(part: part, part_quantity: 3)
+
+      approve(order)
+
+      reloaded = parts.find(part.id)
+      expect(reloaded.quantity_reserved).to eq(0)
+      expect(reloaded.available_quantity).to eq(7)
+    end
+
     it "stamps the moment work was authorised" do
       order = order_awaiting_approval
 
@@ -32,62 +48,8 @@ RSpec.describe Application::Workshop::ApproveQuote do
     end
   end
 
-  describe "when stock is short" do
-    # The whole reason this use case exists. An approved order whose parts do
-    # not exist is worse than a refused approval: the workshop has promised work
-    # it cannot do.
-    it "refuses the approval" do
-      part  = create_part(on_hand: 1)
-      order = order_awaiting_approval(part: part, part_quantity: 1)
-      parts.save(parts.find(part.id).deduct!(1)) # someone else took the last one
-
-      result = approve(order)
-
-      expect(result).to be_failure
-      expect(result.error).to match(/insufficient stock/)
-    end
-
-    it "leaves the order untouched — the status change is rolled back too" do
-      part  = create_part(on_hand: 1)
-      order = order_awaiting_approval(part: part, part_quantity: 1)
-      parts.save(parts.find(part.id).deduct!(1))
-
-      approve(order)
-
-      expect(orders.find(order.id).status).to be_awaiting_approval
-      expect(orders.find(order.id).approved_at).to be_nil
-    end
-
-    it "leaves every part untouched, including ones already deducted in the same call" do
-      plentiful = create_part(sku: "OL-5W30", on_hand: 50)
-      scarce    = create_part(sku: "FIL-OL01", on_hand: 1)
-      vehicle   = create_vehicle
-
-      order = Application::Workshop::OpenServiceOrder.call(
-        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-      ).value
-      Application::Workshop::AddPartToOrder.call(
-        orders: orders, parts: parts, id: order.id, part_id: plentiful.id, quantity: 4
-      )
-      Application::Workshop::AddPartToOrder.call(
-        orders: orders, parts: parts, id: order.id, part_id: scarce.id, quantity: 1
-      )
-      Application::Workshop::StartDiagnosis.call(repository: orders, id: order.id)
-      Application::Workshop::SendQuote.call(repository: orders, id: order.id, diagnosis: "revisão")
-
-      parts.save(parts.find(scarce.id).deduct!(1)) # the scarce one runs out
-
-      approve(order)
-
-      # The plentiful part is locked and deducted before the scarce one is even
-      # looked at. Without a single transaction, its 4 units would be gone.
-      expect(parts.find(plentiful.id).quantity_on_hand).to eq(50)
-      expect(parts.find(scarce.id).quantity_on_hand).to eq(0)
-    end
-  end
-
   describe "the same part quoted on more than one line" do
-    it "deducts the summed quantity, not each line against the full balance" do
+    it "consumes the summed quantity, not each line against the full balance" do
       part    = create_part(on_hand: 5)
       vehicle = create_vehicle
 
@@ -104,25 +66,7 @@ RSpec.describe Application::Workshop::ApproveQuote do
 
       expect(approve(order)).to be_success
       expect(parts.find(part.id).quantity_on_hand).to eq(1)
-    end
-
-    it "refuses when the lines together exceed the balance, though each fits alone" do
-      part    = create_part(on_hand: 3)
-      vehicle = create_vehicle
-
-      order = Application::Workshop::OpenServiceOrder.call(
-        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-      ).value
-      2.times do
-        Application::Workshop::AddPartToOrder.call(
-          orders: orders, parts: parts, id: order.id, part_id: part.id, quantity: 2
-        )
-      end
-      Application::Workshop::StartDiagnosis.call(repository: orders, id: order.id)
-      Application::Workshop::SendQuote.call(repository: orders, id: order.id, diagnosis: "revisão")
-
-      expect(approve(order)).to be_failure
-      expect(parts.find(part.id).quantity_on_hand).to eq(3)
+      expect(parts.find(part.id).quantity_reserved).to eq(0)
     end
   end
 

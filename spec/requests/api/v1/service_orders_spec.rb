@@ -101,6 +101,74 @@ RSpec.describe "api/v1/service_orders", type: :request do
     end
   end
 
+  path "/api/v1/service_orders/{id}/add_part" do
+    parameter name: :Authorization, in: :header, type: :string, required: true
+    parameter name: :id, in: :path, type: :integer, required: true
+
+    post "Adds a part to the order and reserves its stock" do
+      tags "Service orders"
+      consumes "application/json"
+      produces "application/json"
+      security [ bearer_auth: [] ]
+      description <<~TEXT
+        First phase of the two-phase stock flow: the part is reserved, not yet
+        deducted. Approval turns the reservation into a deduction; rejecting or
+        cancelling the order releases it. A part cannot be added when its
+        available balance (on hand minus already reserved) is short.
+      TEXT
+
+      parameter name: :body, in: :body, schema: {
+        type: :object,
+        properties: {
+          item: {
+            type: :object,
+            properties: {
+              part_id: { type: :integer, example: 1 },
+              quantity: { type: :integer, example: 2 }
+            },
+            required: %w[part_id quantity]
+          }
+        },
+        required: [ "item" ]
+      }
+
+      response "200", "part added, stock reserved" do
+        let(:part) { create_part(on_hand: 10) }
+        let(:id) do
+          Application::Workshop::OpenServiceOrder.call(
+            orders: orders, vehicles: vehicles, customers: customers,
+            vehicle_id: create_vehicle.id
+          ).value.id
+        end
+        let(:body) { { item: { part_id: part.id, quantity: 3 } } }
+
+        run_test! do |response|
+          expect(JSON.parse(response.body)["part_items"].size).to eq(1)
+          expect(parts.find(part.id).quantity_reserved).to eq(3)
+          expect(parts.find(part.id).quantity_on_hand).to eq(10)
+        end
+      end
+
+      response "422", "not enough stock to reserve" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:part) { create_part(on_hand: 1) }
+        let(:id) do
+          Application::Workshop::OpenServiceOrder.call(
+            orders: orders, vehicles: vehicles, customers: customers,
+            vehicle_id: create_vehicle.id
+          ).value.id
+        end
+        let(:body) { { item: { part_id: part.id, quantity: 2 } } }
+
+        run_test! do |response|
+          expect(JSON.parse(response.body)["error"]).to match(/insufficient stock/)
+          expect(parts.find(part.id).quantity_reserved).to eq(0)
+        end
+      end
+    end
+  end
+
   path "/api/v1/service_orders/{id}/approve_quote" do
     parameter name: :Authorization, in: :header, type: :string, required: true
     parameter name: :id, in: :path, type: :integer, required: true
@@ -110,9 +178,10 @@ RSpec.describe "api/v1/service_orders", type: :request do
       produces "application/json"
       security [ bearer_auth: [] ]
       description <<~TEXT
-        Pivotal event of the flow: it moves the order into execution AND deducts
-        every quoted part from inventory, in a single transaction. If any part
-        is short, nothing is approved.
+        Pivotal event of the flow: it moves the order into execution AND turns
+        every quoted part's reservation into a real deduction, in a single
+        transaction. The parts were reserved when they were added, so approval
+        never fails for want of stock — only on the status transition.
       TEXT
 
       response "200", "approved, stock deducted" do
@@ -123,28 +192,7 @@ RSpec.describe "api/v1/service_orders", type: :request do
         run_test! do |response|
           expect(JSON.parse(response.body)["status"]).to eq("in_progress")
           expect(parts.find(part.id).quantity_on_hand).to eq(8)
-        end
-      end
-
-      response "422", "not enough stock — nothing is approved" do
-        schema "$ref" => "#/components/schemas/Error"
-
-        let(:part)  { create_part(on_hand: 1) }
-        let(:order) { order_awaiting_approval(part: part, part_quantity: 1) }
-        let(:id)    { order.id }
-
-        before do
-          # Order first: the part was quoted while the unit was still on the
-          # shelf. Then someone else takes it. That sequence is the whole point
-          # — quoting and approving are separated in time, and stock can vanish
-          # in between.
-          order
-          parts.save(parts.find(part.id).deduct!(1))
-        end
-
-        run_test! do |response|
-          expect(JSON.parse(response.body)["error"]).to match(/insufficient stock/)
-          expect(orders.find(order.id).status).to be_awaiting_approval
+          expect(parts.find(part.id).quantity_reserved).to eq(0)
         end
       end
 
