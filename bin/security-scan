@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Generates the vulnerability report required by Phase 1.
+#
+#   bin/security-scan
+#
+# Runs the static analyser (Brakeman) and the dependency auditor
+# (bundler-audit), writes both reports under tmp/security/ and exits non-zero if
+# either finds something — so this can also be dropped into CI as-is.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+OUT=tmp/security
+mkdir -p "$OUT"
+
+echo "==> Brakeman (static analysis of the application code)"
+bundle exec brakeman --no-pager -o "$OUT/brakeman.txt" -o "$OUT/brakeman.json" 2>&1 | tail -20
+brakeman_status=${PIPESTATUS[0]}
+
+echo
+echo "==> bundler-audit (known CVEs in the dependency tree)"
+bundle exec bundler-audit check --update | tee "$OUT/bundler-audit.txt"
+audit_status=${PIPESTATUS[0]}
+
+echo
+echo "Reports written to $OUT/"
+
+if [ "$brakeman_status" -ne 0 ] || [ "$audit_status" -ne 0 ]; then
+  echo "Findings detected — review the reports before submitting." >&2
+  exit 1
+fi
+
+echo "No findings."

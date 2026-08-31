@@ -1,0 +1,32 @@
+# Ignore bundler config.
+/.bundle
+
+# Ignore all logfiles and tempfiles.
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+
+/tmp/pids/*
+!/tmp/pids/.keep
+
+# Ignore storage (uploaded files in development and any SQLite databases).
+/storage/*
+!/storage/.keep
+
+# Ignore master key for decrypting credentials and more.
+/config/master.key
+
+# Local environment overrides. .env.example is committed; .env is not.
+/.env
+/.env.*
+!/.env.example
+
+# Coverage reports are generated on every run; the threshold in
+# spec/rails_helper.rb is what is enforced, not a committed HTML report.
+/coverage
+
+# Security scan output (regenerate with `bin/security-scan`).
+/tmp/security
+
+.DS_Store

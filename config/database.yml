@@ -1,0 +1,33 @@
+# PostgreSQL.
+#
+# Why PostgreSQL (Tech Challenge requires justifying the choice):
+#   - The core of the domain (service order + items + stock deduction) needs
+#     ACID transactions: deducting stock and moving the order's status must be
+#     atomic, or the workshop promises parts it does not have.
+#   - The model is strongly relational (Customer 1-N Vehicle 1-N Order N-N Part).
+#   - `numeric`/`bigint` for money without precision loss, plus CHECK
+#     constraints that protect aggregate invariants at the database edge too.
+#   - Mature, first-class support in both ActiveRecord and Docker.
+#
+# Every connection resolves from DATABASE_URL when it is present (as in
+# docker-compose), falling back to the discrete host/port variables below.
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  host: <%= ENV.fetch("POSTGRES_HOST", "localhost") %>
+  port: <%= ENV.fetch("POSTGRES_PORT", 5432) %>
+  username: <%= ENV.fetch("POSTGRES_USER", "postgres") %>
+  password: <%= ENV.fetch("POSTGRES_PASSWORD", "postgres") %>
+
+development:
+  <<: *default
+  database: <%= ENV.fetch("POSTGRES_DB", "oficina_api_development") %>
+
+test:
+  <<: *default
+  database: oficina_api_test
+
+production:
+  <<: *default
+  database: <%= ENV.fetch("POSTGRES_DB", "oficina_api_production") %>

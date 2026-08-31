@@ -1,0 +1,11 @@
+#!/bin/bash -e
+
+# Prepare the database before starting the server: create it if missing, then
+# run pending migrations. Covers both the production CMD (bin/thrust bin/rails
+# server) and the development one (bin/rails server -b 0.0.0.0 -p 3000), which
+# is why the check looks for "server" anywhere in the arguments.
+if [[ " $* " == *" server "* ]]; then
+  ./bin/rails db:prepare
+fi
+
+exec "${@}"

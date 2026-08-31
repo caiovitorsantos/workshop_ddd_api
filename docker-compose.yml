@@ -1,0 +1,58 @@
+# Full development environment: API + PostgreSQL.
+#
+#   docker compose up --build          # brings everything up (API waits for a healthy db)
+#   docker compose exec api bin/rails db:seed
+#   docker compose exec api bundle exec rspec
+#
+# API at http://localhost:3000 and Swagger UI at http://localhost:3000/api-docs
+
+name: oficina-api
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-oficina_api_development}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # The API only starts once the database actually answers, not merely once
+      # the container exists.
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      target: development
+    environment:
+      RAILS_ENV: development
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-oficina_api_development}
+      JWT_SECRET: ${JWT_SECRET:-development-only-secret}
+      RAILS_MAX_THREADS: 5
+    ports:
+      # Host port is configurable so this stack can coexist with another Rails
+      # project already holding 3000: `API_PORT=3010 docker compose up`.
+      - "${API_PORT:-3000}:3000"
+    volumes:
+      # Source mounted from the host: editing a file reloads without a rebuild.
+      - .:/rails
+      # Gems get their own volume so the mount above does not shadow them.
+      - installed_gems:/usr/local/bundle
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  installed_gems:

@@ -1,0 +1,840 @@
+---
+openapi: 3.0.1
+info:
+  title: Workshop Management API
+  version: v1
+  description: |
+    Sistema Integrado de Atendimento e Execução de Serviços.
+
+    MVP backend for a mid-sized auto repair shop, modelled with
+    Domain-Driven Design and organised in four layers (Interface,
+    Application, Domain, Infrastructure).
+
+    Authentication: every administrative route requires
+    `Authorization: Bearer <token>`. Get a token from POST /api/v1/session.
+    The only public route is the customer's order tracking endpoint.
+paths:
+  "/api/v1/customers":
+    post:
+      summary: Registers a customer
+      tags:
+      - Customers
+      security:
+      - bearer_auth: []
+      parameters:
+      - name: Authorization
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '201':
+          description: customer registered
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Customer"
+        '422':
+          description: invalid tax id
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '409':
+          description: tax id already registered
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: missing or invalid token
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customer:
+                  type: object
+                  properties:
+                    tax_id:
+                      type: string
+                      example: 529.982.247-25
+                    name:
+                      type: string
+                      example: Maria Souza
+                    email:
+                      type: string
+                      example: maria@example.com
+                    phone:
+                      type: string
+                      example: '11988887777'
+                  required:
+                  - tax_id
+                  - name
+              required:
+              - customer
+    get:
+      summary: Lists customers
+      tags:
+      - Customers
+      security:
+      - bearer_auth: []
+      parameters:
+      - name: Authorization
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: per_page
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: q
+        in: query
+        required: false
+        description: Searches by name or tax id
+        schema:
+          type: string
+      responses:
+        '200':
+          description: search filtered by name
+  "/api/v1/customers/{id}":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: Fetches one customer
+      tags:
+      - Customers
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: customer found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Customer"
+        '404':
+          description: customer not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+    patch:
+      summary: Updates a customer's contact details
+      tags:
+      - Customers
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '200':
+          description: contact details updated
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Customer"
+        '422':
+          description: invalid contact details
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customer:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    email:
+                      type: string
+                    phone:
+                      type: string
+              required:
+              - customer
+    delete:
+      summary: Removes a customer
+      tags:
+      - Customers
+      security:
+      - bearer_auth: []
+      responses:
+        '204':
+          description: customer removed
+  "/api/v1/indicators/average_execution_time":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    get:
+      summary: Average time from opening to delivery
+      tags:
+      - Indicators
+      security:
+      - bearer_auth: []
+      parameters:
+      - name: since
+        in: query
+        required: false
+        description: ISO 8601 instant; only orders opened after it count
+        schema:
+          type: string
+      responses:
+        '200':
+          description: indicator computed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  since:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  delivered_orders:
+                    type: integer
+                    example: 12
+                  average_execution_seconds:
+                    type: integer
+                    nullable: true
+                    example: 16200
+                  average_execution_human:
+                    type: string
+                    nullable: true
+                    example: 4h 30min
+        '400':
+          description: malformed since
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: no token
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/api/v1/parts":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    post:
+      summary: Registers a part
+      tags:
+      - Parts
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: part registered
+        '409':
+          description: SKU already exists
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                part:
+                  type: object
+                  properties:
+                    sku:
+                      type: string
+                      example: FIL-OL01
+                    description:
+                      type: string
+                      example: Filtro de óleo
+                    unit_price:
+                      type: string
+                      example: '45.00'
+                    quantity_on_hand:
+                      type: integer
+                      example: 25
+                    minimum_stock:
+                      type: integer
+                      example: 5
+                  required:
+                  - sku
+                  - description
+                  - unit_price
+              required:
+              - part
+    get:
+      summary: Lists parts
+      tags:
+      - Parts
+      security:
+      - bearer_auth: []
+      parameters:
+      - name: below_minimum
+        in: query
+        required: false
+        description: Only parts that fell under their reorder point
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: parts needing replenishment
+  "/api/v1/parts/{id}/restock":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: Records goods received
+      tags:
+      - Parts
+      security:
+      - bearer_auth: []
+      description: |
+        The only way stock goes up. It only goes down by approving a quote —
+        there is no endpoint that writes the balance directly.
+      parameters: []
+      responses:
+        '200':
+          description: stock replenished
+        '422':
+          description: non-positive quantity
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: part not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: integer
+                  example: 20
+              required:
+              - quantity
+  "/api/v1/service_orders":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    post:
+      summary: Opens a service order
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: order opened in 'received'
+        '404':
+          description: vehicle not registered
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                service_order:
+                  type: object
+                  properties:
+                    vehicle_id:
+                      type: integer
+                      example: 1
+                  required:
+                  - vehicle_id
+              required:
+              - service_order
+    get:
+      summary: Lists service orders
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: customer_id
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: order list
+  "/api/v1/service_orders/{id}":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: Fetches one order with its items and quote
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: order found
+        '404':
+          description: order not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/api/v1/service_orders/{id}/approve_quote":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: Approves the quote and consumes the parts
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      description: |
+        Pivotal event of the flow: it moves the order into execution AND deducts
+        every quoted part from inventory, in a single transaction. If any part
+        is short, nothing is approved.
+      responses:
+        '200':
+          description: approved, stock deducted
+        '422':
+          description: not enough stock — nothing is approved
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '409':
+          description: order is not awaiting approval
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '401':
+          description: no token
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/api/v1/services":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    post:
+      summary: Adds a service to the catalog
+      tags:
+      - Services
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: service added
+        '409':
+          description: name already in the catalog
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '422':
+          description: estimated duration must be positive
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                service:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: Troca de óleo
+                    description:
+                      type: string
+                    price:
+                      type: string
+                      example: '120.00'
+                    estimated_minutes:
+                      type: integer
+                      example: 30
+                  required:
+                  - name
+                  - price
+              required:
+              - service
+    get:
+      summary: Lists the catalog
+      tags:
+      - Services
+      security:
+      - bearer_auth: []
+      parameters:
+      - name: include_retired
+        in: query
+        required: false
+        description: 'Include retired services (default: active only)'
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: active services
+  "/api/v1/session":
+    post:
+      summary: Signs in and returns a JWT
+      tags:
+      - Authentication
+      parameters: []
+      responses:
+        '201':
+          description: authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  expires_in:
+                    type: integer
+                    example: 28800
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      name:
+                        type: string
+                      role:
+                        type: string
+                        enum:
+                        - front_desk
+                        - mechanic
+                        - manager
+        '401':
+          description: unknown email
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  example: gerente@oficina.local
+                password:
+                  type: string
+                  example: oficina123
+              required:
+              - email
+              - password
+  "/api/v1/tracking/{number}":
+    parameters:
+    - name: number
+      in: path
+      required: true
+      description: Order number as printed on the customer's slip
+      example: OS-000001
+      schema:
+        type: string
+    get:
+      summary: Tracks a service order (public)
+      tags:
+      - Tracking
+      description: |
+        The only endpoint that does not require a JWT: the customer has a number
+        on a slip, not an account.
+
+        Because order numbers are sequential and therefore guessable, the
+        response is deliberately minimal — no money, no diagnosis, no customer
+        details, and no license plate. Rate limited to 30 requests per minute.
+      responses:
+        '200':
+          description: order found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  number:
+                    type: string
+                    example: OS-000001
+                  status:
+                    type: string
+                    example: awaiting_approval
+                  status_label:
+                    type: string
+                    example: Aguardando aprovação
+                  waiting_on_you:
+                    type: boolean
+                  opened_at:
+                    type: string
+                    format: date-time
+                  approved_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  completed_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                  delivered_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                required:
+                - number
+                - status
+                - status_label
+        '404':
+          description: no such order
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/api/v1/customers/{customer_id}/vehicles":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: customer_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: Registers a vehicle for a customer
+      tags:
+      - Vehicles
+      security:
+      - bearer_auth: []
+      parameters: []
+      responses:
+        '201':
+          description: vehicle registered
+        '422':
+          description: malformed plate
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '409':
+          description: plate already registered
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: customer does not exist
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vehicle:
+                  type: object
+                  properties:
+                    plate:
+                      type: string
+                      example: ABC1D23
+                    make:
+                      type: string
+                      example: Volkswagen
+                    model:
+                      type: string
+                      example: Gol
+                    year:
+                      type: integer
+                      example: 2019
+                  required:
+                  - plate
+                  - make
+                  - model
+                  - year
+              required:
+              - vehicle
+    get:
+      summary: Lists a customer's vehicles
+      tags:
+      - Vehicles
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: vehicle list
+  "/api/v1/vehicles/{id}/transfer":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: Transfers the vehicle to another customer
+      tags:
+      - Vehicles
+      security:
+      - bearer_auth: []
+      description: Ownership is a business command, not an editable field.
+      parameters: []
+      responses:
+        '200':
+          description: transferred
+        '404':
+          description: new owner does not exist
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customer_id:
+                  type: integer
+              required:
+              - customer_id
+servers:
+- url: http://localhost:3000
+  description: Local environment (docker compose)
+components:
+  securitySchemes:
+    bearer_auth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: invalid CPF
+      required:
+      - error
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        tax_id:
+          type: string
+          example: 529.982.247-25
+        tax_id_kind:
+          type: string
+          enum:
+          - cpf
+          - cnpj
+        name:
+          type: string
+          example: Maria Souza
+        email:
+          type: string
+          nullable: true
+          example: maria@example.com
+        phone:
+          type: string
+          nullable: true
+          example: '11988887777'
+      required:
+      - id
+      - tax_id
+      - tax_id_kind
+      - name
