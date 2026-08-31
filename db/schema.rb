@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_29_140100) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_31_184300) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -50,12 +50,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_29_140100) do
     t.integer "minimum_stock", default: 0, null: false
     t.bigint "price_cents", default: 0, null: false
     t.integer "quantity_on_hand", default: 0, null: false
+    t.integer "quantity_reserved", default: 0, null: false
     t.string "sku", limit: 40, null: false
     t.datetime "updated_at", null: false
     t.index ["sku"], name: "index_parts_on_sku", unique: true
     t.check_constraint "minimum_stock >= 0", name: "minimum_stock_not_negative"
     t.check_constraint "price_cents >= 0", name: "part_price_not_negative"
     t.check_constraint "quantity_on_hand >= 0", name: "stock_never_negative"
+    t.check_constraint "quantity_reserved <= quantity_on_hand", name: "reserved_within_on_hand"
+    t.check_constraint "quantity_reserved >= 0", name: "quantity_reserved_not_negative"
   end
 
   create_table "service_items", force: :cascade do |t|
