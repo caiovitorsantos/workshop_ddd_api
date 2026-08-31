@@ -2,17 +2,13 @@ module Application
   module Workshop
     # Use case: the customer refused the price.
     #
-    # No stock to return: parts only leave the shelf on approval, so a rejected
-    # quote never touched inventory.
-    class RejectQuote < ServiceOrderCommand
-      def initialize(repository:, id:, reason: nil)
-        super(repository: repository, id: id)
-        @reason = reason
-      end
-
+    # The order was holding reserved stock from the moment its parts were added
+    # (`AddPartToOrder`); rejecting the quote releases every unit back to the
+    # available balance. Deliberately distinct from `CancelServiceOrder`: nobody
+    # refused a price there, and a report on sales lost to price must not
+    # confuse the two.
+    class RejectQuote < ReleasingOrderCommand
       private
-
-      attr_reader :reason
 
       def apply(order) = order.reject_quote!(reason: reason)
     end

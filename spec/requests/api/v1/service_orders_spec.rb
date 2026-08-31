@@ -270,14 +270,19 @@ RSpec.describe "api/v1/service_orders", type: :request do
       expect(JSON.parse(response.body)["error"]).to match(/cannot add services/)
     end
 
-    it "cancels an order the customer never approved" do
-      order   = order_awaiting_approval
+    it "cancels an order the customer never approved and releases its parts" do
+      part    = create_part(on_hand: 10)
+      order   = order_awaiting_approval(part: part, part_quantity: 3)
       headers = auth_headers
+
+      expect(parts.find(part.id).quantity_reserved).to eq(3)
 
       post "/api/v1/service_orders/#{order.id}/reject_quote",
            params: { reason: "muito caro" }, headers: headers
 
       expect(JSON.parse(response.body)["status"]).to eq("cancelled")
+      expect(parts.find(part.id).quantity_reserved).to eq(0)
+      expect(parts.find(part.id).quantity_on_hand).to eq(10)
     end
 
     it "refuses to skip states" do

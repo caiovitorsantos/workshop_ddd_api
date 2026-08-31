@@ -82,7 +82,7 @@ module Api
       end
 
       def reject_quote
-        run(Application::Workshop::RejectQuote, reason: params[:reason])
+        run_releasing(Application::Workshop::RejectQuote)
       end
 
       def complete
@@ -94,13 +94,23 @@ module Api
       end
 
       def cancel
-        run(Application::Workshop::CancelServiceOrder, reason: params[:reason])
+        run_releasing(Application::Workshop::CancelServiceOrder)
       end
 
       private
 
       def run(use_case, **arguments)
         result = use_case.call(repository: order_repository, id: params[:id], **arguments)
+        respond_with(result) { |order| serialize(order) }
+      end
+
+      # Rejection and cancellation release the order's reserved parts, so they
+      # need the parts repository and the same two-context shape as approval.
+      def run_releasing(use_case)
+        result = use_case.call(
+          orders: order_repository, parts: part_repository,
+          id: params[:id], reason: params[:reason]
+        )
         respond_with(result) { |order| serialize(order) }
       end
 
