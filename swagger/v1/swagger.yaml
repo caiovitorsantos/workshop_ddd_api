@@ -444,6 +444,59 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/Error"
+  "/api/v1/service_orders/{id}/add_part":
+    parameters:
+    - name: Authorization
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: Adds a part to the order and reserves its stock
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      description: |
+        First phase of the two-phase stock flow: the part is reserved, not yet
+        deducted. Approval turns the reservation into a deduction; rejecting or
+        cancelling the order releases it. A part cannot be added when its
+        available balance (on hand minus already reserved) is short.
+      parameters: []
+      responses:
+        '200':
+          description: part added, stock reserved
+        '422':
+          description: not enough stock to reserve
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                item:
+                  type: object
+                  properties:
+                    part_id:
+                      type: integer
+                      example: 1
+                    quantity:
+                      type: integer
+                      example: 2
+                  required:
+                  - part_id
+                  - quantity
+              required:
+              - item
   "/api/v1/service_orders/{id}/approve_quote":
     parameters:
     - name: Authorization
@@ -463,18 +516,13 @@ paths:
       security:
       - bearer_auth: []
       description: |
-        Pivotal event of the flow: it moves the order into execution AND deducts
-        every quoted part from inventory, in a single transaction. If any part
-        is short, nothing is approved.
+        Pivotal event of the flow: it moves the order into execution AND turns
+        every quoted part's reservation into a real deduction, in a single
+        transaction. The parts were reserved when they were added, so approval
+        never fails for want of stock — only on the status transition.
       responses:
         '200':
           description: approved, stock deducted
-        '422':
-          description: not enough stock — nothing is approved
-          content:
-            application/json:
-              schema:
-                "$ref": "#/components/schemas/Error"
         '409':
           description: order is not awaiting approval
           content:

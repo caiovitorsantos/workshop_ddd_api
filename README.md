@@ -143,9 +143,11 @@ encostaria em uma linha de regra de negócio.
 | Identity        | Genérico           | `User`                     |
 
 O investimento em DDD tático é proporcional: `ServiceOrder` recebe agregado
-completo, objetos de valor, máquina de estados e eventos de domínio; os
-contextos de suporte ficam mais enxutos, porque padronizar um CRUD com sete
-camadas seria cerimônia sem retorno.
+completo, objetos de valor, máquina de estados e eventos de domínio; `Part`
+também é um agregado de verdade, porque o ciclo de estoque de duas fases
+(reserva → baixa → liberação) tem invariantes a proteger; os demais contextos de
+suporte ficam mais enxutos, porque padronizar um CRUD com sete camadas seria
+cerimônia sem retorno.
 
 O mapa de contextos completo, o Event Storming e o Domain Storytelling estão na
 [documentação DDD](../docs/) do repositório de planejamento.
@@ -184,8 +186,15 @@ O negócio fala português; o código, inglês. O mapeamento é explícito e ún
 | Placa                 | `LicensePlate`   | `Domain::Registry` — objeto de valor   |
 | Serviço (catálogo)    | `Service`        | `Domain::Catalog`                      |
 | Peça / Insumo         | `Part`           | `Domain::Inventory`                    |
-| Estoque               | `quantity_on_hand` | atributo de `Part`                   |
-| Baixa de estoque      | `deduct!`        | comando de `Part`                      |
+| Estoque em mãos       | `quantity_on_hand` | atributo de `Part`                   |
+| Estoque reservado     | `quantity_reserved` | atributo de `Part`                  |
+| Saldo disponível      | `available_quantity` | consulta de `Part` (mãos − reservado) |
+| Reserva de estoque    | `reserve!` / `StockReserved` | comando/evento de `Part` (peça entra na OS) |
+| Baixa de estoque      | `consume_reserved!` / `StockDeducted` | comando/evento de `Part` (aprovação) |
+| Liberação de reserva  | `release!` / `StockReleased` | comando/evento de `Part` (reprovação / cancelamento) |
+| Entrada de estoque    | `restock!` / `StockReplenished` | comando/evento de `Part` (fornecedor) |
+| Estoque insuficiente  | `InsufficientStockDetected` | evento de `Part`                |
+| Reabastecimento solicitado | `ReplenishmentRequested` | evento de `Part` (na travessia do mínimo) |
 | Usuário / Papel       | `User` / `role`  | `Domain::Identity`                     |
 
 Status da OS: `received` (Recebida), `in_diagnosis` (Em diagnóstico),
@@ -200,13 +209,16 @@ tela e nas mensagens de erro.
 
 O desafio pede a justificativa. São quatro razões, em ordem de peso:
 
-1. **Transações ACID.** Aprovar um orçamento baixa estoque *e* muda o status da
-   OS. Sem atomicidade a oficina promete peça que não tem. É o requisito que
+1. **Transações ACID.** Cada movimento de estoque cruza dois contextos numa só
+   transação: adicionar peça reserva *e* grava o item da OS; aprovar baixa o
+   reservado *e* muda o status; reprovar/cancelar libera a reserva *e* muda o
+   status. Sem atomicidade a oficina promete peça que não tem. É o requisito que
    elimina a maioria das alternativas NoSQL.
 2. **O modelo é genuinamente relacional.** Cliente 1-N Veículo 1-N OS N-N Peça.
    Modelar isso como documentos exigiria duplicar dados e reconciliá-los à mão.
 3. **Invariantes na borda do banco.** `CHECK (quantity_on_hand >= 0)`,
-   `CHECK (status IN (...))` e chaves estrangeiras são a última linha de defesa
+   `CHECK (quantity_reserved <= quantity_on_hand)`, `CHECK (status IN (...))` e
+   chaves estrangeiras são a última linha de defesa
    contra escrita que não passa pela aplicação — carga de dados, console,
    migração futura. O domínio já garante isso em memória; o banco garante contra
    o que não passou pelo domínio.
@@ -226,7 +238,11 @@ A suíte é dividida por camada, e a divisão importa:
 
 - `spec/domain/` — POROs puros. Sem banco, sem HTTP, sem fixtures. Roda em
   milissegundos e é onde mora a maior parte das asserções de regra de negócio.
-- `spec/application/` — casos de uso contra um repositório falso em memória.
+- `spec/application/` — casos de uso. Os simples contra um repositório falso em
+  memória; os que cruzam dois contextos numa transação (`ApproveQuote`,
+  `AddPartToOrder`, `RejectQuote`, `CancelServiceOrder`) contra PostgreSQL real,
+  porque um repositório falso não prova que o rollback desfez as duas metades.
+- `spec/infrastructure/` — adaptadores de porta contra o banco.
 - `spec/requests/` — integração de verdade (controller → caso de uso →
   repositório → PostgreSQL), escrita no DSL do **rswag**.
 
@@ -297,7 +313,7 @@ app/
     │   ├── workshop/            ServiceOrder (agregado raiz), Quote, OrderStatus, Events
     │   ├── registry/            Customer, Vehicle, TaxId, LicensePlate
     │   ├── catalog/             Service
-    │   ├── inventory/           Part
+    │   ├── inventory/           Part (agregado raiz), Events
     │   └── identity/            User
     ├── application/             Camada de Aplicação — casos de uso, Result
     └── infrastructure/          Camada de Infraestrutura
@@ -305,8 +321,8 @@ app/
         ├── persistence/repositories/  adaptadores das portas
         └── auth/jwt_token.rb
 
-db/migrate/                      uma migração por contexto delimitado
-spec/                            domain/ · application/ · requests/
+db/migrate/                      uma migração por contexto (+ colunas evolutivas)
+spec/                            domain/ · application/ · infrastructure/ · requests/
 swagger/v1/swagger.yaml          gerado a partir dos specs
 ```
 
@@ -325,15 +341,16 @@ Todos exigem `Authorization: Bearer <token>`, exceto o acompanhamento.
 | `POST` | `/vehicles/:id/transfer` | Troca de dono |
 | `GET POST PATCH DELETE` | `/services` · `/services/:id` | Catálogo |
 | `POST` | `/services/:id/retire` | Tira de linha, preservando histórico |
-| `GET POST PATCH DELETE` | `/parts` · `/parts/:id` | Peças (`?below_minimum=1`) |
+| `GET POST PATCH DELETE` | `/parts` · `/parts/:id` | Peças (`?below_minimum=1`); resposta traz `quantity_on_hand`, `quantity_reserved` e `available` |
 | `POST` | `/parts/:id/restock` | Entrada de estoque |
 | `GET POST` | `/service_orders` | Abre e lista OS (`?status=`) |
 | `GET` | `/service_orders/:id` | OS com itens e orçamento |
-| `POST` | `/service_orders/:id/add_service` · `add_part` | Monta a OS |
+| `POST` | `/service_orders/:id/add_service` | Monta a OS |
+| `POST` | `/service_orders/:id/add_part` | Monta a OS **+ reserva estoque** (422 se faltar saldo disponível) |
 | `POST` | `/service_orders/:id/start_diagnosis` | → Em diagnóstico |
 | `POST` | `/service_orders/:id/send_quote` | → Aguardando aprovação |
-| `POST` | `/service_orders/:id/approve_quote` | → Em execução **+ baixa estoque** |
-| `POST` | `/service_orders/:id/reject_quote` · `cancel` | → Cancelada |
+| `POST` | `/service_orders/:id/approve_quote` | → Em execução **+ baixa do reservado** |
+| `POST` | `/service_orders/:id/reject_quote` · `cancel` | → Cancelada **+ libera reserva** |
 | `POST` | `/service_orders/:id/complete` · `deliver` | → Finalizada → Entregue |
 | `GET` | `/indicators/average_execution_time` | Tempo médio (`?since=`) |
 | `GET` | **`/tracking/:number`** | **Acompanhamento público, sem token** |
@@ -342,16 +359,19 @@ Todos exigem `Authorization: Bearer <token>`, exceto o acompanhamento.
 
 ## Estado atual
 
-Implementado e testado ponta a ponta — **163 exemplos, 0 falhas, 95,54% de
+Implementado e testado ponta a ponta — **200 exemplos, 0 falhas, 96,39% de
 cobertura de linha**. Os cinco contextos delimitados estão completos, do domínio
-ao endpoint.
+ao endpoint. O estoque segue o ciclo de duas fases do Event Storming: a peça é
+**reservada** ao entrar na OS, **baixada** na aprovação e **liberada** se a OS
+for reprovada ou cancelada antes da aprovação.
 
 Fora do escopo desta fase, com a justificativa registrada no
 [plano do projeto](../PLANO_TECH_CHALLENGE.md):
 
 - **Aprovação parcial de orçamento** — o MVP é tudo-ou-nada (PA-4)
 - **Cancelar OS já em execução** — a máquina de estados proíbe; permitir isso
-  exige, junto, a devolução das peças ao estoque (PA-3 e PA-6 são uma mudança só)
+  exige, junto, o estorno da **baixa** já feita (PA-6; a liberação de reserva,
+  PA-3, já existe)
 - **Média de execução por serviço** — não é derivável: uma OS com três serviços
   tem uma duração só. Exigiria copiar `estimated_minutes` para o `ServiceItem`
 - **Canal de notificação ao cliente** — modelado como sistema externo; a OS muda
