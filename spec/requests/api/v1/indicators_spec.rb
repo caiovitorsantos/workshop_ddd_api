@@ -22,8 +22,6 @@ RSpec.describe "api/v1/indicators", type: :request do
   end
 
   path "/api/v1/indicators/average_execution_time" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
-
     get "Average time from opening to delivery" do
       tags "Indicators"
       produces "application/json"

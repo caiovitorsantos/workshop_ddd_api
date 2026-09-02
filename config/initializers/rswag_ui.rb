@@ -3,6 +3,12 @@ Rswag::Ui.configure do |c|
   # http://localhost:3000/api-docs
   c.openapi_endpoint "/api-docs/v1/swagger.yaml", "Workshop API V1"
 
+  # Keep the token from the "Authorize" dialog in the browser's localStorage, so
+  # it is entered once and reused on every "Try it out" — and survives a page
+  # reload. Each operation declares `security: [bearer_auth]` and nothing else,
+  # so there is no per-endpoint Authorization field to fill.
+  c.config_object["persistAuthorization"] = true
+
   # The Swagger UI is not exposed in production: an interactive console against
   # a live API is an attack surface, not a feature.
   # c.basic_auth_enabled = true

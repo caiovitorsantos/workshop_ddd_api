@@ -22,7 +22,6 @@ RSpec.describe "api/v1/customers", type: :request do
       consumes "application/json"
       produces "application/json"
       security [ bearer_auth: [] ]
-      parameter name: :Authorization, in: :header, type: :string, required: true
 
       parameter name: :body, in: :body, schema: {
         type: :object,
@@ -91,7 +90,6 @@ RSpec.describe "api/v1/customers", type: :request do
       tags "Customers"
       produces "application/json"
       security [ bearer_auth: [] ]
-      parameter name: :Authorization, in: :header, type: :string, required: true
       parameter name: :page, in: :query, type: :integer, required: false
       parameter name: :per_page, in: :query, type: :integer, required: false
       parameter name: :q, in: :query, type: :string, required: false,
@@ -124,7 +122,6 @@ RSpec.describe "api/v1/customers", type: :request do
   end
 
   path "/api/v1/customers/{id}" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
     parameter name: :id, in: :path, type: :integer, required: true
 
     get "Fetches one customer" do

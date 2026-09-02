@@ -6,8 +6,6 @@ RSpec.describe "api/v1/services", type: :request do
   let(:auth_headers) { { "Authorization" => send(:Authorization) } }
 
   path "/api/v1/services" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
-
     post "Adds a service to the catalog" do
       tags "Services"
       consumes "application/json"

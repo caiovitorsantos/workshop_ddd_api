@@ -6,8 +6,6 @@ RSpec.describe "api/v1/parts", type: :request do
   let(:auth_headers) { { "Authorization" => send(:Authorization) } }
 
   path "/api/v1/parts" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
-
     post "Registers a part" do
       tags "Parts"
       consumes "application/json"
@@ -82,7 +80,6 @@ RSpec.describe "api/v1/parts", type: :request do
   end
 
   path "/api/v1/parts/{id}/restock" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
     parameter name: :id, in: :path, type: :integer, required: true
 
     post "Records goods received" do
