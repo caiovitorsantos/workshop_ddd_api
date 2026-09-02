@@ -18,7 +18,7 @@ Tech Challenge — Fase 1, 15SOAT / FIAP Pós-Tech.
 Pré-requisitos: Docker e Docker Compose. Nada mais precisa estar instalado.
 
 ```bash
-git clone <url-do-repositorio> && cd oficina_api
+git clone <url-do-repositorio> && cd workshop_ddd_api
 docker compose up --build
 ```
 
@@ -34,12 +34,6 @@ docker compose exec api bin/rails db:seed
 | API                | http://localhost:3000/api/v1       |
 | Swagger UI         | http://localhost:3000/api-docs     |
 | Health check       | http://localhost:3000/up           |
-
-Se as portas 3000 ou 5432 já estiverem ocupadas por outro projeto:
-
-```bash
-API_PORT=3010 POSTGRES_PORT=5433 docker compose up --build
-```
 
 Usuários criados pelo seed (senha `oficina123`, configurável via `SEED_PASSWORD`):
 
@@ -150,7 +144,7 @@ suporte ficam mais enxutos, porque padronizar um CRUD com sete camadas seria
 cerimônia sem retorno.
 
 O mapa de contextos completo, o Event Storming e o Domain Storytelling estão na
-[documentação DDD](../docs/) do repositório de planejamento.
+[documentação DDD](https://miro.com/app/board/uXjVHuiDQwQ=/?share_link_id=442999674997) do repositório de planejamento.
 
 ### O agregado ServiceOrder
 
