@@ -20,14 +20,6 @@ module Domain
         validate!
       end
 
-      # Command: the vehicle changed hands.
-      def transfer_to(new_customer_id)
-        self.class.new(
-          id: id, plate: plate, make: make, model: model,
-          year: year, customer_id: new_customer_id
-        )
-      end
-
       # Command: fix a typo in the description.
       #
       # The plate is not editable — like a customer's tax id, it is the

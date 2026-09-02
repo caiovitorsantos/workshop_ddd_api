@@ -338,7 +338,6 @@ Todos exigem `Authorization: Bearer <token>`, exceto o acompanhamento.
 | `GET POST PATCH DELETE` | `/customers` · `/customers/:id` | CRUD de clientes |
 | `GET POST` | `/customers/:id/vehicles` | Veículos de um cliente |
 | `GET PATCH DELETE` | `/vehicles/:id` | Veículo |
-| `POST` | `/vehicles/:id/transfer` | Troca de dono |
 | `GET POST PATCH DELETE` | `/services` · `/services/:id` | Catálogo |
 | `POST` | `/services/:id/retire` | Tira de linha, preservando histórico |
 | `GET POST PATCH DELETE` | `/parts` · `/parts/:id` | Peças (`?below_minimum=1`); resposta traz `quantity_on_hand`, `quantity_reserved` e `available` |

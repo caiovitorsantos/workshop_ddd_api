@@ -39,17 +39,6 @@ RSpec.describe Domain::Registry::Vehicle do
     end
   end
 
-  describe "#transfer_to" do
-    it "returns a vehicle owned by someone else, leaving the original alone" do
-      original = build(customer_id: 1)
-      transferred = original.transfer_to(2)
-
-      expect(transferred.customer_id).to eq(2)
-      expect(original.customer_id).to eq(1)
-      expect(transferred.plate).to eq(original.plate)
-    end
-  end
-
   describe "#correct_details" do
     it "fixes the description, leaving the plate and owner alone" do
       original  = build(make: "Volkswagem", customer_id: 1)

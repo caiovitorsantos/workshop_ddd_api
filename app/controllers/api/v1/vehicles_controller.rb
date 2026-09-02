@@ -1,6 +1,6 @@
 module Api
   module V1
-    # Vehicle CRUD, plus the ownership transfer command.
+    # Vehicle CRUD.
     class VehiclesController < BaseController
       def index
         # Nested under a customer when the route supplies one; otherwise the
@@ -45,16 +45,6 @@ module Api
         render json: serialize(repository.save(corrected))
       rescue Domain::Shared::Errors::Base => e
         render_error(e.message, :unprocessable_entity)
-      end
-
-      # Ownership is a command, not an editable field — see TransferVehicle.
-      def transfer
-        result = Application::Registry::TransferVehicle.call(
-          vehicles: repository, customers: customer_repository,
-          id: params[:id], customer_id: params[:customer_id]
-        )
-
-        respond_with(result) { |vehicle| serialize(vehicle) }
       end
 
       def destroy

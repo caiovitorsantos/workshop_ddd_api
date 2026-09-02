@@ -14,10 +14,7 @@ Rails.application.routes.draw do
       resources :customers do
         resources :vehicles, only: [ :index, :create ]
       end
-      resources :vehicles, only: [ :show, :update, :destroy ] do
-        # Ownership is a business command, not an editable field.
-        member { post :transfer }
-      end
+      resources :vehicles, only: [ :show, :update, :destroy ]
 
       # Catalog
       resources :services do

@@ -6,7 +6,6 @@ RSpec.describe "api/v1/vehicles", type: :request do
   let(:auth_headers) { { "Authorization" => send(:Authorization) } }
 
   path "/api/v1/customers/{customer_id}/vehicles" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
     parameter name: :customer_id, in: :path, type: :integer, required: true
 
     post "Registers a vehicle for a customer" do
@@ -91,45 +90,6 @@ RSpec.describe "api/v1/vehicles", type: :request do
         run_test! do |response|
           expect(JSON.parse(response.body)["data"].size).to eq(1)
         end
-      end
-    end
-  end
-
-  path "/api/v1/vehicles/{id}/transfer" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
-    parameter name: :id, in: :path, type: :integer, required: true
-
-    post "Transfers the vehicle to another customer" do
-      tags "Vehicles"
-      consumes "application/json"
-      produces "application/json"
-      security [ bearer_auth: [] ]
-      description "Ownership is a business command, not an editable field."
-
-      parameter name: :body, in: :body, schema: {
-        type: :object,
-        properties: { customer_id: { type: :integer } },
-        required: [ "customer_id" ]
-      }
-
-      response "200", "transferred" do
-        let(:vehicle) { create_vehicle }
-        let(:id) { vehicle.id }
-        let(:new_owner) { create_customer(name: "João Pereira") }
-        let(:body) { { customer_id: new_owner.id } }
-
-        run_test! do |response|
-          expect(JSON.parse(response.body)["customer_id"]).to eq(new_owner.id)
-        end
-      end
-
-      response "404", "new owner does not exist" do
-        schema "$ref" => "#/components/schemas/Error"
-
-        let(:id) { create_vehicle.id }
-        let(:body) { { customer_id: 999_999 } }
-
-        run_test!
       end
     end
   end
