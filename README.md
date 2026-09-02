@@ -143,9 +143,6 @@ também é um agregado de verdade, porque o ciclo de estoque de duas fases
 suporte ficam mais enxutos, porque padronizar um CRUD com sete camadas seria
 cerimônia sem retorno.
 
-O mapa de contextos completo, o Event Storming e o Domain Storytelling estão na
-[documentação DDD](https://miro.com/app/board/uXjVHuiDQwQ=/?share_link_id=442999674997) do repositório de planejamento.
-
 ### O agregado ServiceOrder
 
 O ciclo de vida da OS vive em `Domain::Workshop::OrderStatus`, e as transições
