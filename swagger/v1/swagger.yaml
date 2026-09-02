@@ -21,12 +21,7 @@ paths:
       - Customers
       security:
       - bearer_auth: []
-      parameters:
-      - name: Authorization
-        in: header
-        required: true
-        schema:
-          type: string
+      parameters: []
       responses:
         '201':
           description: customer registered
@@ -85,11 +80,6 @@ paths:
       security:
       - bearer_auth: []
       parameters:
-      - name: Authorization
-        in: header
-        required: true
-        schema:
-          type: string
       - name: page
         in: query
         required: false
@@ -111,11 +101,6 @@ paths:
           description: search filtered by name
   "/api/v1/customers/{id}":
     parameters:
-    - name: Authorization
-      in: header
-      required: true
-      schema:
-        type: string
     - name: id
       in: path
       required: true
@@ -187,12 +172,6 @@ paths:
         '204':
           description: customer removed
   "/api/v1/indicators/average_execution_time":
-    parameters:
-    - name: Authorization
-      in: header
-      required: true
-      schema:
-        type: string
     get:
       summary: Average time from opening to delivery
       tags:
@@ -242,12 +221,6 @@ paths:
               schema:
                 "$ref": "#/components/schemas/Error"
   "/api/v1/parts":
-    parameters:
-    - name: Authorization
-      in: header
-      required: true
-      schema:
-        type: string
     post:
       summary: Registers a part
       tags:
@@ -312,11 +285,6 @@ paths:
           description: parts needing replenishment
   "/api/v1/parts/{id}/restock":
     parameters:
-    - name: Authorization
-      in: header
-      required: true
-      schema:
-        type: string
     - name: id
       in: path
       required: true
@@ -359,12 +327,6 @@ paths:
               required:
               - quantity
   "/api/v1/service_orders":
-    parameters:
-    - name: Authorization
-      in: header
-      required: true
-      schema:
-        type: string
     post:
       summary: Opens a service order
       tags:
@@ -419,11 +381,6 @@ paths:
           description: order list
   "/api/v1/service_orders/{id}":
     parameters:
-    - name: Authorization
-      in: header
-      required: true
-      schema:
-        type: string
     - name: id
       in: path
       required: true
@@ -444,13 +401,61 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/Error"
-  "/api/v1/service_orders/{id}/add_part":
+  "/api/v1/service_orders/{id}/add_service":
     parameters:
-    - name: Authorization
-      in: header
+    - name: id
+      in: path
       required: true
       schema:
-        type: string
+        type: integer
+    post:
+      summary: Adds a catalogued service to the order and regenerates the quote
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      description: |
+        The service's name and price are copied from the Catalog into the order
+        line, so a later catalogue price change cannot rewrite a quote the
+        customer has already seen. Every add recomputes the quote
+        (labour_total + parts_total). Allowed only while the order is a draft.
+      parameters: []
+      responses:
+        '200':
+          description: service added, quote regenerated
+        '404':
+          description: service not in the catalogue
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '422':
+          description: service is retired
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                item:
+                  type: object
+                  properties:
+                    service_id:
+                      type: integer
+                      example: 1
+                    quantity:
+                      type: integer
+                      example: 1
+                  required:
+                  - service_id
+              required:
+              - item
+  "/api/v1/service_orders/{id}/add_part":
+    parameters:
     - name: id
       in: path
       required: true
@@ -497,13 +502,72 @@ paths:
                   - quantity
               required:
               - item
-  "/api/v1/service_orders/{id}/approve_quote":
+  "/api/v1/service_orders/{id}/start_diagnosis":
     parameters:
-    - name: Authorization
-      in: header
+    - name: id
+      in: path
       required: true
       schema:
-        type: string
+        type: integer
+    post:
+      summary: Moves the order into diagnosis
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      description: |
+        received -> in_diagnosis. The status moves because the mechanic started
+        work, not because anyone wrote the field — there is no endpoint that
+        sets `status` directly.
+      responses:
+        '200':
+          description: diagnosis started
+        '409':
+          description: order is not in 'received'
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/api/v1/service_orders/{id}/send_quote":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: Closes the diagnosis and sends the quote to the customer
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      description: |
+        in_diagnosis -> awaiting_approval. Requires a diagnosis and at least one
+        service or part on the order. From here the order is out of the
+        workshop's hands until the customer decides.
+      parameters: []
+      responses:
+        '200':
+          description: quote sent
+        '422':
+          description: no diagnosis given
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                diagnosis:
+                  type: string
+                  example: Óleo vencido e filtro saturado
+              required:
+              - diagnosis
+  "/api/v1/service_orders/{id}/approve_quote":
+    parameters:
     - name: id
       in: path
       required: true
@@ -535,13 +599,127 @@ paths:
             application/json:
               schema:
                 "$ref": "#/components/schemas/Error"
-  "/api/v1/services":
+  "/api/v1/service_orders/{id}/reject_quote":
     parameters:
-    - name: Authorization
-      in: header
+    - name: id
+      in: path
       required: true
       schema:
-        type: string
+        type: integer
+    post:
+      summary: The customer refused the quote
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      description: |
+        awaiting_approval -> cancelled, releasing every reserved part back to the
+        shelf in the same transaction. Distinct from cancel: this one is a sale
+        lost to price.
+      parameters: []
+      responses:
+        '200':
+          description: quote rejected, parts released
+        '409':
+          description: order is already in progress
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: muito caro
+  "/api/v1/service_orders/{id}/complete":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: Marks the work finished
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      description: in_progress -> completed, stamping completed_at.
+      responses:
+        '200':
+          description: work completed
+        '409':
+          description: order is not in progress
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/api/v1/service_orders/{id}/deliver":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: Hands the vehicle back to the customer
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      description: |
+        completed -> delivered. Closes the operation and opens the history:
+        delivered_at is stamped and the execution time becomes available.
+      responses:
+        '200':
+          description: vehicle delivered
+        '409':
+          description: order is not completed
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/api/v1/service_orders/{id}/cancel":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: The workshop ends the order
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      description: |
+        Wrong vehicle, duplicate entry, customer gave up. Allowed only before
+        approval (received, in_diagnosis, awaiting_approval); any reserved parts
+        are released. Distinct from reject_quote: nobody refused a price here.
+      parameters: []
+      responses:
+        '200':
+          description: order cancelled
+        '409':
+          description: order is already in progress
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  example: veículo errado
+  "/api/v1/services":
     post:
       summary: Adds a service to the catalog
       tags:
@@ -724,11 +902,6 @@ paths:
                 "$ref": "#/components/schemas/Error"
   "/api/v1/customers/{customer_id}/vehicles":
     parameters:
-    - name: Authorization
-      in: header
-      required: true
-      schema:
-        type: string
     - name: customer_id
       in: path
       required: true
@@ -799,45 +972,6 @@ paths:
       responses:
         '200':
           description: vehicle list
-  "/api/v1/vehicles/{id}/transfer":
-    parameters:
-    - name: Authorization
-      in: header
-      required: true
-      schema:
-        type: string
-    - name: id
-      in: path
-      required: true
-      schema:
-        type: integer
-    post:
-      summary: Transfers the vehicle to another customer
-      tags:
-      - Vehicles
-      security:
-      - bearer_auth: []
-      description: Ownership is a business command, not an editable field.
-      parameters: []
-      responses:
-        '200':
-          description: transferred
-        '404':
-          description: new owner does not exist
-          content:
-            application/json:
-              schema:
-                "$ref": "#/components/schemas/Error"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                customer_id:
-                  type: integer
-              required:
-              - customer_id
 servers:
 - url: http://localhost:3000
   description: Local environment (docker compose)

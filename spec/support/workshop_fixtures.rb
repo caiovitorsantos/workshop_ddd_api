@@ -98,6 +98,41 @@ module WorkshopFixtures
     )
   end
 
+  # A freshly opened order, still a draft (status `received`).
+  def draft_order(vehicle: nil)
+    vehicle ||= create_vehicle
+    must_succeed(
+      Application::Workshop::OpenServiceOrder.call(
+        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
+      )
+    )
+  end
+
+  # A draft with one service on it, moved to `in_diagnosis` — the state
+  # `send_quote` acts from.
+  def order_in_diagnosis(service: nil)
+    order   = draft_order
+    service ||= create_service
+    must_succeed(
+      Application::Workshop::AddServiceToOrder.call(
+        orders: orders, services: services, id: order.id, service_id: service.id
+      )
+    )
+    must_succeed(Application::Workshop::StartDiagnosis.call(repository: orders, id: order.id))
+  end
+
+  # An approved order, now `in_progress`.
+  def order_in_progress(**options)
+    order = order_awaiting_approval(**options)
+    must_succeed(Application::Workshop::ApproveQuote.call(orders: orders, parts: parts, id: order.id))
+  end
+
+  # Work finished, order `completed` and awaiting delivery.
+  def order_completed(**options)
+    order = order_in_progress(**options)
+    must_succeed(Application::Workshop::CompleteWork.call(repository: orders, id: order.id))
+  end
+
   # Walks a fresh order up to the point where the quote is with the customer.
   # Everything after that is what most specs actually want to exercise.
   def order_awaiting_approval(part: nil, part_quantity: 2, service: nil)

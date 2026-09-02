@@ -10,8 +10,6 @@ RSpec.describe "api/v1/service_orders", type: :request do
   let(:auth_headers) { { "Authorization" => send(:Authorization) } }
 
   path "/api/v1/service_orders" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
-
     post "Opens a service order" do
       tags "Service orders"
       consumes "application/json"
@@ -72,7 +70,6 @@ RSpec.describe "api/v1/service_orders", type: :request do
   end
 
   path "/api/v1/service_orders/{id}" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
     parameter name: :id, in: :path, type: :integer, required: true
 
     get "Fetches one order with its items and quote" do
@@ -101,8 +98,73 @@ RSpec.describe "api/v1/service_orders", type: :request do
     end
   end
 
+  path "/api/v1/service_orders/{id}/add_service" do
+    parameter name: :id, in: :path, type: :integer, required: true
+
+    post "Adds a catalogued service to the order and regenerates the quote" do
+      tags "Service orders"
+      consumes "application/json"
+      produces "application/json"
+      security [ bearer_auth: [] ]
+      description <<~TEXT
+        The service's name and price are copied from the Catalog into the order
+        line, so a later catalogue price change cannot rewrite a quote the
+        customer has already seen. Every add recomputes the quote
+        (labour_total + parts_total). Allowed only while the order is a draft.
+      TEXT
+
+      parameter name: :body, in: :body, schema: {
+        type: :object,
+        properties: {
+          item: {
+            type: :object,
+            properties: {
+              service_id: { type: :integer, example: 1 },
+              quantity: { type: :integer, example: 1 }
+            },
+            required: %w[service_id]
+          }
+        },
+        required: [ "item" ]
+      }
+
+      response "200", "service added, quote regenerated" do
+        let(:service) { create_service(price: 120) }
+        let(:id)      { draft_order.id }
+        let(:body)    { { item: { service_id: service.id, quantity: 1 } } }
+
+        run_test! do |response|
+          payload = JSON.parse(response.body)
+          expect(payload["service_items"].size).to eq(1)
+          expect(payload["quote"]["labour_total"]).to eq("120.0")
+          expect(payload["quote"]["total"]).to eq("120.0")
+        end
+      end
+
+      response "404", "service not in the catalogue" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:id)   { draft_order.id }
+        let(:body) { { item: { service_id: 999_999 } } }
+
+        run_test!
+      end
+
+      response "422", "service is retired" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:service) { create_service(active: false) }
+        let(:id)      { draft_order.id }
+        let(:body)    { { item: { service_id: service.id } } }
+
+        run_test! do |response|
+          expect(JSON.parse(response.body)["error"]).to match(/no longer offered/)
+        end
+      end
+    end
+  end
+
   path "/api/v1/service_orders/{id}/add_part" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
     parameter name: :id, in: :path, type: :integer, required: true
 
     post "Adds a part to the order and reserves its stock" do
@@ -169,8 +231,82 @@ RSpec.describe "api/v1/service_orders", type: :request do
     end
   end
 
+  path "/api/v1/service_orders/{id}/start_diagnosis" do
+    parameter name: :id, in: :path, type: :integer, required: true
+
+    post "Moves the order into diagnosis" do
+      tags "Service orders"
+      produces "application/json"
+      security [ bearer_auth: [] ]
+      description <<~TEXT
+        received -> in_diagnosis. The status moves because the mechanic started
+        work, not because anyone wrote the field — there is no endpoint that
+        sets `status` directly.
+      TEXT
+
+      response "200", "diagnosis started" do
+        let(:id) { draft_order.id }
+
+        run_test! do |response|
+          expect(JSON.parse(response.body)["status"]).to eq("in_diagnosis")
+        end
+      end
+
+      response "409", "order is not in 'received'" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:id) { order_awaiting_approval.id }
+
+        run_test!
+      end
+    end
+  end
+
+  path "/api/v1/service_orders/{id}/send_quote" do
+    parameter name: :id, in: :path, type: :integer, required: true
+
+    post "Closes the diagnosis and sends the quote to the customer" do
+      tags "Service orders"
+      consumes "application/json"
+      produces "application/json"
+      security [ bearer_auth: [] ]
+      description <<~TEXT
+        in_diagnosis -> awaiting_approval. Requires a diagnosis and at least one
+        service or part on the order. From here the order is out of the
+        workshop's hands until the customer decides.
+      TEXT
+
+      parameter name: :body, in: :body, schema: {
+        type: :object,
+        properties: { diagnosis: { type: :string, example: "Óleo vencido e filtro saturado" } },
+        required: [ "diagnosis" ]
+      }
+
+      response "200", "quote sent" do
+        let(:id)   { order_in_diagnosis.id }
+        let(:body) { { diagnosis: "Óleo vencido e filtro saturado" } }
+
+        run_test! do |response|
+          payload = JSON.parse(response.body)
+          expect(payload["status"]).to eq("awaiting_approval")
+          expect(payload["diagnosis"]).to eq("Óleo vencido e filtro saturado")
+        end
+      end
+
+      response "422", "no diagnosis given" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:id)   { order_in_diagnosis.id }
+        let(:body) { { diagnosis: "" } }
+
+        run_test! do |response|
+          expect(JSON.parse(response.body)["error"]).to match(/diagnosis/)
+        end
+      end
+    end
+  end
+
   path "/api/v1/service_orders/{id}/approve_quote" do
-    parameter name: :Authorization, in: :header, type: :string, required: true
     parameter name: :id, in: :path, type: :integer, required: true
 
     post "Approves the quote and consumes the parts" do
@@ -215,6 +351,148 @@ RSpec.describe "api/v1/service_orders", type: :request do
 
         let(:Authorization) { "Bearer nope" }
         let(:id) { order_awaiting_approval.id }
+
+        run_test!
+      end
+    end
+  end
+
+  path "/api/v1/service_orders/{id}/reject_quote" do
+    parameter name: :id, in: :path, type: :integer, required: true
+
+    post "The customer refused the quote" do
+      tags "Service orders"
+      consumes "application/json"
+      produces "application/json"
+      security [ bearer_auth: [] ]
+      description <<~TEXT
+        awaiting_approval -> cancelled, releasing every reserved part back to the
+        shelf in the same transaction. Distinct from cancel: this one is a sale
+        lost to price.
+      TEXT
+
+      parameter name: :body, in: :body, schema: {
+        type: :object,
+        properties: { reason: { type: :string, example: "muito caro" } }
+      }
+
+      response "200", "quote rejected, parts released" do
+        let(:part)  { create_part(on_hand: 10) }
+        let(:order) { order_awaiting_approval(part: part, part_quantity: 3) }
+        let(:id)    { order.id }
+        let(:body)  { { reason: "muito caro" } }
+
+        run_test! do |response|
+          expect(JSON.parse(response.body)["status"]).to eq("cancelled")
+          expect(parts.find(part.id).quantity_reserved).to eq(0)
+        end
+      end
+
+      response "409", "order is already in progress" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:id)   { order_in_progress.id }
+        let(:body) { {} }
+
+        run_test!
+      end
+    end
+  end
+
+  path "/api/v1/service_orders/{id}/complete" do
+    parameter name: :id, in: :path, type: :integer, required: true
+
+    post "Marks the work finished" do
+      tags "Service orders"
+      produces "application/json"
+      security [ bearer_auth: [] ]
+      description "in_progress -> completed, stamping completed_at."
+
+      response "200", "work completed" do
+        let(:id) { order_in_progress.id }
+
+        run_test! do |response|
+          payload = JSON.parse(response.body)
+          expect(payload["status"]).to eq("completed")
+          expect(payload["timeline"]["completed_at"]).to be_present
+        end
+      end
+
+      response "409", "order is not in progress" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:id) { order_awaiting_approval.id }
+
+        run_test!
+      end
+    end
+  end
+
+  path "/api/v1/service_orders/{id}/deliver" do
+    parameter name: :id, in: :path, type: :integer, required: true
+
+    post "Hands the vehicle back to the customer" do
+      tags "Service orders"
+      produces "application/json"
+      security [ bearer_auth: [] ]
+      description <<~TEXT
+        completed -> delivered. Closes the operation and opens the history:
+        delivered_at is stamped and the execution time becomes available.
+      TEXT
+
+      response "200", "vehicle delivered" do
+        let(:id) { order_completed.id }
+
+        run_test! do |response|
+          payload = JSON.parse(response.body)
+          expect(payload["status"]).to eq("delivered")
+          expect(payload["timeline"]["delivered_at"]).to be_present
+        end
+      end
+
+      response "409", "order is not completed" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:id) { order_in_progress.id }
+
+        run_test!
+      end
+    end
+  end
+
+  path "/api/v1/service_orders/{id}/cancel" do
+    parameter name: :id, in: :path, type: :integer, required: true
+
+    post "The workshop ends the order" do
+      tags "Service orders"
+      consumes "application/json"
+      produces "application/json"
+      security [ bearer_auth: [] ]
+      description <<~TEXT
+        Wrong vehicle, duplicate entry, customer gave up. Allowed only before
+        approval (received, in_diagnosis, awaiting_approval); any reserved parts
+        are released. Distinct from reject_quote: nobody refused a price here.
+      TEXT
+
+      parameter name: :body, in: :body, schema: {
+        type: :object,
+        properties: { reason: { type: :string, example: "veículo errado" } }
+      }
+
+      response "200", "order cancelled" do
+        let(:id)   { draft_order.id }
+        let(:body) { { reason: "veículo errado" } }
+
+        run_test! do |response|
+          expect(JSON.parse(response.body)["status"]).to eq("cancelled")
+        end
+      end
+
+      response "409", "order is already in progress" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:id)   { order_in_progress.id }
+        let(:body) { {} }
 
         run_test!
       end
