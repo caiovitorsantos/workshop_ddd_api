@@ -1,0 +1,64 @@
+name: Vulnerability report
+
+# Runs the same scan developers run locally (`bin/security-scan`: Brakeman +
+# bundler-audit) and publishes the result as a downloadable artifact plus a
+# summary on the run page.
+#
+# Report-only on purpose: it never fails the build. Treat a finding as a signal
+# to review, not a merge blocker — the blocking bundler-audit gate still lives
+# in ci.yml.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  vulnerability_report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Run Brakeman + bundler-audit
+        id: scan
+        continue-on-error: true
+        run: bin/security-scan
+
+      - name: Write run summary
+        if: always()
+        run: |
+          {
+            echo "## Vulnerability report"
+            echo
+            if [ "${{ steps.scan.outcome }}" = "success" ]; then
+              echo "✅ No findings."
+            else
+              echo "⚠️ Findings detected — download the \`security-report\` artifact for the full output."
+            fi
+            echo
+            echo "### Brakeman (static analysis)"
+            echo '```'
+            tail -n 40 tmp/security/brakeman.txt 2>/dev/null || echo "(no report produced)"
+            echo '```'
+            echo "### bundler-audit (known CVEs in the dependency tree)"
+            echo '```'
+            cat tmp/security/bundler-audit.txt 2>/dev/null || echo "(no report produced)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report
+          path: tmp/security/
+          retention-days: 30
+          if-no-files-found: warn
