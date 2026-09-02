@@ -216,12 +216,12 @@ O desafio pede a justificativa. São quatro razões, em ordem de peso:
    elimina a maioria das alternativas NoSQL.
 2. **O modelo é genuinamente relacional.** Cliente 1-N Veículo 1-N OS N-N Peça.
    Modelar isso como documentos exigiria duplicar dados e reconciliá-los à mão.
-3. **Invariantes na borda do banco.** `CHECK (quantity_on_hand >= 0)`,
-   `CHECK (quantity_reserved <= quantity_on_hand)`, `CHECK (status IN (...))` e
-   chaves estrangeiras são a última linha de defesa
-   contra escrita que não passa pela aplicação — carga de dados, console,
-   migração futura. O domínio já garante isso em memória; o banco garante contra
-   o que não passou pelo domínio.
+3. **Compatibilidade de primeira classe com a stack Rails.** O Active Record
+   trata PostgreSQL como cidadão de primeira classe: `SELECT ... FOR UPDATE`
+   para o lock da aprovação, CHECK constraints e chaves estrangeiras expressos
+   direto na migração, e o mesmo adaptador em desenvolvimento, teste e produção
+   — sem a divergência entre um SQLite local e o Postgres de produção que
+   costuma esconder bug até o deploy.
 4. **`bigint` para dinheiro.** Todo valor monetário é guardado em centavos
    (`Domain::Shared::Money`). Nenhum float encosta em um orçamento que o cliente
    aprovou juridicamente.
