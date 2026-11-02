@@ -23,6 +23,11 @@ module Domain
 
       # An aggregate with this natural identity already exists (tax id, plate, SKU).
       class AlreadyExists < Base; end
+
+      # The aggregate cannot be removed while others still point at it — a
+      # customer with vehicles, a part on a service order. Retiring or
+      # detaching it first is a business decision, not something to cascade.
+      class InUse < Base; end
     end
   end
 end

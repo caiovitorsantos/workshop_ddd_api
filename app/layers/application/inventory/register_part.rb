@@ -10,6 +10,7 @@ module Application
 
       attr_reader :parts
 
+      # A duplicate SKU comes back from the repository as AlreadyExists.
       def perform(sku:, description:, unit_price:, quantity_on_hand: 0, minimum_stock: 0)
         parts.save(
           Domain::Inventory::Part.new(
@@ -20,8 +21,6 @@ module Application
             minimum_stock: minimum_stock
           )
         )
-      rescue ActiveRecord::RecordNotUnique
-        raise Domain::Shared::Errors::AlreadyExists, "part '#{sku.to_s.upcase}' already exists"
       end
     end
   end

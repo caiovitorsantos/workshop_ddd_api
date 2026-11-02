@@ -123,6 +123,13 @@ RSpec.describe "api/v1/vehicles", type: :request do
       delete "/api/v1/vehicles/#{order.vehicle_id}", headers: auth_headers
 
       expect(response).to have_http_status(:conflict)
+      expect(JSON.parse(response.body)["error"]).to match(/service orders attached/)
+    end
+
+    it "reports a correction to a vehicle that does not exist" do
+      patch "/api/v1/vehicles/999999", params: { vehicle: { model: "Gol" } }, headers: auth_headers
+
+      expect(response).to have_http_status(:not_found)
     end
   end
 end

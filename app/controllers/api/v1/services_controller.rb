@@ -34,34 +34,22 @@ module Api
       end
 
       def update
-        service = repository.find(params[:id])
-        return render_error("service not found", :not_found) unless service
-
-        revised = service.revise(
-          name: service_params.fetch(:name, service.name),
-          description: service_params.fetch(:description, service.description),
-          price: price_or(service.price),
-          estimated_minutes: service_params.fetch(:estimated_minutes, service.estimated_minutes),
-          active: service_params.fetch(:active, service.active?)
+        result = container.revise_service.call(
+          id: params[:id],
+          **changes_from(service_params, :name, :description, :price, :estimated_minutes, :active)
         )
 
-        render json: serialize(repository.save(revised))
-      rescue Domain::Shared::Errors::Base => e
-        render_error(e.message, :unprocessable_entity)
+        respond_with(result) { |service| serialize(service) }
       end
 
       # Retiring beats deleting when the service has history: order items keep
       # their own copy of the name and price, so the past stays readable.
       def retire
-        service = repository.find(params[:id])
-        return render_error("service not found", :not_found) unless service
-
-        render json: serialize(repository.save(service.retire))
+        respond_with(container.retire_service.call(id: params[:id])) { |service| serialize(service) }
       end
 
       def destroy
-        repository.delete(params[:id])
-        head :no_content
+        respond_with(container.remove_service.call(id: params[:id]), success: :no_content)
       end
 
       private
@@ -70,12 +58,6 @@ module Api
 
       def service_params
         params.require(:service).permit(:name, :description, :price, :estimated_minutes, :active)
-      end
-
-      def price_or(current)
-        return current unless service_params.key?(:price)
-
-        Domain::Shared::Money.from_amount(service_params[:price])
       end
 
       def serialize(service)

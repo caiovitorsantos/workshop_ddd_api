@@ -31,26 +31,18 @@ module Api
         respond_with(result, success: :created) { |vehicle| serialize(vehicle) }
       end
 
+      # The plate is not among the changes passed on — it is the vehicle's
+      # natural identity.
       def update
-        vehicle = repository.find(params[:id])
-        return render_error("vehicle not found", :not_found) unless vehicle
-
-        corrected = vehicle.correct_details(
-          make: vehicle_params.fetch(:make, vehicle.make),
-          model: vehicle_params.fetch(:model, vehicle.model),
-          year: vehicle_params.fetch(:year, vehicle.year)
+        result = container.correct_vehicle_details.call(
+          id: params[:id], **changes_from(vehicle_params, :make, :model, :year)
         )
 
-        render json: serialize(repository.save(corrected))
-      rescue Domain::Shared::Errors::Base => e
-        render_error(e.message, :unprocessable_entity)
+        respond_with(result) { |vehicle| serialize(vehicle) }
       end
 
       def destroy
-        repository.delete(params[:id])
-        head :no_content
-      rescue ActiveRecord::InvalidForeignKey
-        render_error("vehicle has service orders attached", :conflict)
+        respond_with(container.remove_vehicle.call(id: params[:id]), success: :no_content)
       end
 
       private

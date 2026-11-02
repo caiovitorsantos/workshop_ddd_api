@@ -15,6 +15,7 @@ module Api
         invalid_value: :unprocessable_entity,
         invalid_transition: :conflict,
         already_exists: :conflict,
+        in_use: :conflict,
         business_rule_violation: :unprocessable_entity
       }.freeze
 
@@ -30,16 +31,26 @@ module Api
 
       # The single exit point for use case results.
       def respond_with(result, success: :ok, &serializer)
-        if result.success?
+        if result.failure?
+          render_error(result.error, STATUS_FOR_CODE.fetch(result.code, :unprocessable_entity))
+        elsif success == :no_content
+          head :no_content
+        else
           body = serializer ? serializer.call(result.value) : result.value
           render json: body, status: success
-        else
-          render_error(result.error, STATUS_FOR_CODE.fetch(result.code, :unprocessable_entity))
         end
       end
 
       def render_error(message, status)
         render json: { error: message }, status: status
+      end
+
+      # The subset of `permitted` the client actually sent, as keywords for a
+      # use case. An absent attribute keeps its current value; naming the
+      # editable ones here is what keeps the rest (a plate, a tax id, a stock
+      # level) out of reach of a PATCH.
+      def changes_from(permitted, *editable)
+        permitted.slice(*editable).to_h.symbolize_keys
       end
 
       def page     = params.fetch(:page, 1).to_i

@@ -107,6 +107,21 @@ RSpec.describe "api/v1/services", type: :request do
     end
   end
 
+  describe "renaming" do
+    # The unique index on the name is the guard; the adapter turns its answer
+    # into the domain's AlreadyExists, so this is a 409 rather than a 500.
+    it "refuses to rename a service to a name already in the catalog" do
+      create_service(name: "Alinhamento")
+      service = create_service(name: "Balanceamento")
+
+      patch "/api/v1/services/#{service.id}",
+            params: { service: { name: "Alinhamento" } }, headers: auth_headers
+
+      expect(response).to have_http_status(:conflict)
+      expect(JSON.parse(response.body)["error"]).to match(/already in the catalog/)
+    end
+  end
+
   describe "pricing" do
     # The reason ServiceItem copies the price instead of pointing at the catalog.
     it "does not disturb a quote that was already sent" do

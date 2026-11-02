@@ -30,26 +30,18 @@ module Api
         respond_with(result, success: :created) { |customer| serialize(customer) }
       end
 
+      # `tax_id` is not among the changes passed on: it is the customer's
+      # natural identity, and the spec proves a PATCH ignores it.
       def update
-        customer = repository.find(params[:id])
-        return render_error("customer not found", :not_found) unless customer
-
-        updated = customer.update_contact(
-          name: customer_params.fetch(:name, customer.name),
-          email: customer_params.fetch(:email, customer.email),
-          phone: customer_params.fetch(:phone, customer.phone)
+        result = container.update_customer_contact.call(
+          id: params[:id], **changes_from(customer_params, :name, :email, :phone)
         )
 
-        render json: serialize(repository.save(updated))
-      rescue Domain::Shared::Errors::Base => e
-        render_error(e.message, :unprocessable_entity)
+        respond_with(result) { |customer| serialize(customer) }
       end
 
       def destroy
-        repository.delete(params[:id])
-        head :no_content
-      rescue ActiveRecord::RecordNotDestroyed, ActiveRecord::InvalidForeignKey
-        render_error("customer still has vehicles attached", :conflict)
+        respond_with(container.remove_customer.call(id: params[:id]), success: :no_content)
       end
 
       private

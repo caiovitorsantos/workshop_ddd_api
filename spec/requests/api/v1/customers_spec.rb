@@ -205,6 +205,24 @@ RSpec.describe "api/v1/customers", type: :request do
     end
   end
 
+  describe "removal" do
+    it "refuses to remove a customer who still has vehicles" do
+      customer = create_customer(tax_id: "52998224725", name: "Maria Souza")
+      create_vehicle(customer: customer)
+
+      delete "/api/v1/customers/#{customer.id}", headers: auth_headers
+
+      expect(response).to have_http_status(:conflict)
+      expect(JSON.parse(response.body)["error"]).to match(/vehicles attached/)
+    end
+
+    it "treats removing a customer that is already gone as done" do
+      delete "/api/v1/customers/999999", headers: auth_headers
+
+      expect(response).to have_http_status(:no_content)
+    end
+  end
+
   def create_customer(tax_id:, name:)
     Infrastructure::Persistence::Repositories::CustomersInActiveRecord.new.save(
       Domain::Registry::Customer.new(

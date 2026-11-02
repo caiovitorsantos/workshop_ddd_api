@@ -34,8 +34,14 @@ module Infrastructure
           Record.where(customer_id: customer_id).order(:plate).map { |r| to_domain(r) }
         end
 
+        # Deleting what does not exist is a no-op: DELETE stays idempotent.
+        # A row still referenced elsewhere is refused by the database (foreign
+        # key) or by the record's `restrict_with_error`; either way the caller
+        # hears it in the domain's words, never as an ActiveRecord exception.
         def delete(id)
           Record.find_by(id: id)&.destroy!
+        rescue ActiveRecord::RecordNotDestroyed, ActiveRecord::InvalidForeignKey
+          raise Domain::Shared::Errors::InUse, "vehicle has service orders attached"
         end
 
         private

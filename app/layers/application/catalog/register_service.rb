@@ -10,6 +10,8 @@ module Application
 
       attr_reader :services
 
+      # A duplicate name comes back from the repository as AlreadyExists: the
+      # unique index decides, and the adapter translates its answer.
       def perform(name:, price:, description: nil, estimated_minutes: nil)
         services.save(
           Domain::Catalog::Service.new(
@@ -19,11 +21,6 @@ module Application
             estimated_minutes: estimated_minutes
           )
         )
-      rescue ActiveRecord::RecordNotUnique
-        # The unique index is the real guard against two requests racing to add
-        # the same service; a SELECT-then-INSERT check would have a window
-        # between the two. Translate the database's answer into the domain's.
-        raise Domain::Shared::Errors::AlreadyExists, "service '#{name}' is already in the catalog"
       end
     end
   end

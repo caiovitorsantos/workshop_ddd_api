@@ -39,20 +39,13 @@ module Api
         respond_with(result, success: :created) { |part| serialize(part) }
       end
 
+      # `quantity_on_hand` is deliberately not among the changes passed on.
       def update
-        part = repository.find(params[:id])
-        return render_error("part not found", :not_found) unless part
-
-        # `quantity_on_hand` is deliberately not among the editable attributes.
-        revised = part.revise(
-          description: part_params.fetch(:description, part.description),
-          unit_price: unit_price_or(part.unit_price),
-          minimum_stock: part_params.fetch(:minimum_stock, part.minimum_stock)
+        result = container.revise_part.call(
+          id: params[:id], **changes_from(part_params, :description, :unit_price, :minimum_stock)
         )
 
-        render json: serialize(repository.save(revised))
-      rescue Domain::Shared::Errors::Base => e
-        render_error(e.message, :unprocessable_entity)
+        respond_with(result) { |part| serialize(part) }
       end
 
       def restock
@@ -62,8 +55,7 @@ module Api
       end
 
       def destroy
-        repository.delete(params[:id])
-        head :no_content
+        respond_with(container.remove_part.call(id: params[:id]), success: :no_content)
       end
 
       private
@@ -74,12 +66,6 @@ module Api
         params.require(:part).permit(
           :sku, :description, :unit_price, :quantity_on_hand, :minimum_stock
         )
-      end
-
-      def unit_price_or(current)
-        return current unless part_params.key?(:unit_price)
-
-        Domain::Shared::Money.from_amount(part_params[:unit_price])
       end
 
       def serialize(part)

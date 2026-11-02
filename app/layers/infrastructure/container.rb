@@ -34,9 +34,21 @@ module Infrastructure
       Application::Registry::RegisterCustomer.new(customers: customers)
     end
 
+    def update_customer_contact
+      Application::Registry::UpdateCustomerContact.new(customers: customers)
+    end
+
+    def remove_customer = Application::Registry::RemoveCustomer.new(customers: customers)
+
     def register_vehicle
       Application::Registry::RegisterVehicle.new(vehicles: vehicles, customers: customers)
     end
+
+    def correct_vehicle_details
+      Application::Registry::CorrectVehicleDetails.new(vehicles: vehicles)
+    end
+
+    def remove_vehicle = Application::Registry::RemoveVehicle.new(vehicles: vehicles)
 
     # --- Use cases: Catalog ----------------------------------------------------
 
@@ -44,10 +56,16 @@ module Infrastructure
       Application::Catalog::RegisterService.new(services: services)
     end
 
+    def revise_service = Application::Catalog::ReviseService.new(services: services)
+    def retire_service = Application::Catalog::RetireService.new(services: services)
+    def remove_service = Application::Catalog::RemoveService.new(services: services)
+
     # --- Use cases: Inventory --------------------------------------------------
 
     def register_part = Application::Inventory::RegisterPart.new(parts: parts)
+    def revise_part   = Application::Inventory::RevisePart.new(parts: parts)
     def restock_part  = Application::Inventory::RestockPart.new(parts: parts)
+    def remove_part   = Application::Inventory::RemovePart.new(parts: parts)
 
     # --- Use cases: Workshop ---------------------------------------------------
 
