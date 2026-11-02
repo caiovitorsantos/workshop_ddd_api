@@ -8,7 +8,7 @@ module Api
     # would hand the state machine to whoever calls the API.
     class ServiceOrdersController < BaseController
       def index
-        orders, total = order_repository.list(
+        orders, total = container.orders.list(
           page: page, per_page: per_page,
           status: params[:status], customer_id: params[:customer_id]
         )
@@ -20,17 +20,14 @@ module Api
       end
 
       def show
-        order = order_repository.find(params[:id])
+        order = container.orders.find(params[:id])
         return render_error("service order not found", :not_found) unless order
 
         render json: serialize(order)
       end
 
       def create
-        result = Application::Workshop::OpenServiceOrder.call(
-          orders: order_repository,
-          vehicles: vehicle_repository,
-          customers: customer_repository,
+        result = container.open_service_order.call(
           vehicle_id: params.require(:service_order).require(:vehicle_id)
         )
 
@@ -40,8 +37,7 @@ module Api
       # --- Items -------------------------------------------------------------
 
       def add_service
-        result = Application::Workshop::AddServiceToOrder.call(
-          orders: order_repository, services: service_repository,
+        result = container.add_service_to_order.call(
           id: params[:id],
           service_id: item_params.require(:service_id),
           quantity: item_params.fetch(:quantity, 1)
@@ -51,8 +47,7 @@ module Api
       end
 
       def add_part
-        result = Application::Workshop::AddPartToOrder.call(
-          orders: order_repository, parts: part_repository,
+        result = container.add_part_to_order.call(
           id: params[:id],
           part_id: item_params.require(:part_id),
           quantity: item_params.require(:quantity)
@@ -64,78 +59,46 @@ module Api
       # --- Life cycle commands -----------------------------------------------
 
       def start_diagnosis
-        run(Application::Workshop::StartDiagnosis)
+        run(container.start_diagnosis)
       end
 
       def send_quote
-        run(Application::Workshop::SendQuote, diagnosis: params[:diagnosis])
+        run(container.send_quote, diagnosis: params[:diagnosis])
       end
 
+      # Approval, rejection and cancellation also move stock — the container
+      # wires them to the parts repository as well; the controller need not know.
       def approve_quote
-        # The only command that needs a second repository: approving deducts
-        # stock in the same transaction.
-        result = Application::Workshop::ApproveQuote.call(
-          orders: order_repository, parts: part_repository, id: params[:id]
-        )
-
-        respond_with(result) { |order| serialize(order) }
+        run(container.approve_quote)
       end
 
       def reject_quote
-        run_releasing(Application::Workshop::RejectQuote)
+        run(container.reject_quote, reason: params[:reason])
       end
 
       def complete
-        run(Application::Workshop::CompleteWork)
+        run(container.complete_work)
       end
 
       def deliver
-        run(Application::Workshop::DeliverVehicle)
+        run(container.deliver_vehicle)
       end
 
       def cancel
-        run_releasing(Application::Workshop::CancelServiceOrder)
+        run(container.cancel_service_order, reason: params[:reason])
       end
 
       private
 
-      def run(use_case, **arguments)
-        result = use_case.call(repository: order_repository, id: params[:id], **arguments)
-        respond_with(result) { |order| serialize(order) }
-      end
-
-      # Rejection and cancellation release the order's reserved parts, so they
-      # need the parts repository and the same two-context shape as approval.
-      def run_releasing(use_case)
-        result = use_case.call(
-          orders: order_repository, parts: part_repository,
-          id: params[:id], reason: params[:reason]
-        )
+      # Every life cycle command takes the order id plus, at most, one extra
+      # input (a diagnosis, a reason).
+      def run(use_case, **input)
+        result = use_case.call(id: params[:id], **input)
         respond_with(result) { |order| serialize(order) }
       end
 
       def item_params
         params.require(:item).permit(:service_id, :part_id, :quantity)
-      end
-
-      def order_repository
-        @order_repository ||= Infrastructure::Persistence::Repositories::ServiceOrdersInActiveRecord.new
-      end
-
-      def part_repository
-        @part_repository ||= Infrastructure::Persistence::Repositories::PartsInActiveRecord.new
-      end
-
-      def service_repository
-        @service_repository ||= Infrastructure::Persistence::Repositories::ServicesInActiveRecord.new
-      end
-
-      def vehicle_repository
-        @vehicle_repository ||= Infrastructure::Persistence::Repositories::VehiclesInActiveRecord.new
-      end
-
-      def customer_repository
-        @customer_repository ||= Infrastructure::Persistence::Repositories::CustomersInActiveRecord.new
       end
 
       # Listings do not need the items; a page of 25 orders would otherwise drag

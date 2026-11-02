@@ -12,7 +12,7 @@ require "rails_helper"
 # does is turn each reservation into a real deduction.
 RSpec.describe Application::Workshop::ApproveQuote do
   def approve(order)
-    described_class.call(orders: orders, parts: parts, id: order.id)
+    described_class.new(orders: orders, parts: parts).call(id: order.id)
   end
 
   describe "the happy path" do
@@ -53,16 +53,14 @@ RSpec.describe Application::Workshop::ApproveQuote do
       part    = create_part(on_hand: 5)
       vehicle = create_vehicle
 
-      order = Application::Workshop::OpenServiceOrder.call(
-        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-      ).value
+      order = container.open_service_order.call(vehicle_id: vehicle.id).value
       2.times do
-        Application::Workshop::AddPartToOrder.call(
-          orders: orders, parts: parts, id: order.id, part_id: part.id, quantity: 2
+        container.add_part_to_order.call(
+          id: order.id, part_id: part.id, quantity: 2
         )
       end
-      Application::Workshop::StartDiagnosis.call(repository: orders, id: order.id)
-      Application::Workshop::SendQuote.call(repository: orders, id: order.id, diagnosis: "revisão")
+      container.start_diagnosis.call(id: order.id)
+      container.send_quote.call(id: order.id, diagnosis: "revisão")
 
       expect(approve(order)).to be_success
       expect(parts.find(part.id).quantity_on_hand).to eq(1)
@@ -72,7 +70,7 @@ RSpec.describe Application::Workshop::ApproveQuote do
 
   describe "guards" do
     it "reports a missing order rather than exploding" do
-      result = described_class.call(orders: orders, parts: parts, id: 999_999)
+      result = described_class.new(orders: orders, parts: parts).call(id: 999_999)
 
       expect(result).to be_failure
       expect(result.code).to eq(:not_found)
@@ -104,14 +102,12 @@ RSpec.describe Application::Workshop::ApproveQuote do
       service = create_service
       vehicle = create_vehicle
 
-      order = Application::Workshop::OpenServiceOrder.call(
-        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-      ).value
-      Application::Workshop::AddServiceToOrder.call(
-        orders: orders, services: services, id: order.id, service_id: service.id
+      order = container.open_service_order.call(vehicle_id: vehicle.id).value
+      container.add_service_to_order.call(
+        id: order.id, service_id: service.id
       )
-      Application::Workshop::StartDiagnosis.call(repository: orders, id: order.id)
-      Application::Workshop::SendQuote.call(repository: orders, id: order.id, diagnosis: "só mão de obra")
+      container.start_diagnosis.call(id: order.id)
+      container.send_quote.call(id: order.id, diagnosis: "só mão de obra")
 
       expect(approve(orders.find(order.id))).to be_success
     end

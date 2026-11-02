@@ -9,6 +9,10 @@ module WorkshopFixtures
   def parts     = Infrastructure::Persistence::Repositories::PartsInActiveRecord.new
   def orders    = Infrastructure::Persistence::Repositories::ServiceOrdersInActiveRecord.new
 
+  # Use cases come wired by the same composition root production uses, so a
+  # spec exercises the real assembly, not a hand-built approximation of it.
+  def container = Infrastructure::Container.new
+
   # Unique-by-default identifiers.
   #
   # Most specs run inside a transaction that rolls back, so collisions never
@@ -102,9 +106,7 @@ module WorkshopFixtures
   def draft_order(vehicle: nil)
     vehicle ||= create_vehicle
     must_succeed(
-      Application::Workshop::OpenServiceOrder.call(
-        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-      )
+      container.open_service_order.call(vehicle_id: vehicle.id)
     )
   end
 
@@ -114,23 +116,23 @@ module WorkshopFixtures
     order   = draft_order
     service ||= create_service
     must_succeed(
-      Application::Workshop::AddServiceToOrder.call(
-        orders: orders, services: services, id: order.id, service_id: service.id
+      container.add_service_to_order.call(
+        id: order.id, service_id: service.id
       )
     )
-    must_succeed(Application::Workshop::StartDiagnosis.call(repository: orders, id: order.id))
+    must_succeed(container.start_diagnosis.call(id: order.id))
   end
 
   # An approved order, now `in_progress`.
   def order_in_progress(**options)
     order = order_awaiting_approval(**options)
-    must_succeed(Application::Workshop::ApproveQuote.call(orders: orders, parts: parts, id: order.id))
+    must_succeed(container.approve_quote.call(id: order.id))
   end
 
   # Work finished, order `completed` and awaiting delivery.
   def order_completed(**options)
     order = order_in_progress(**options)
-    must_succeed(Application::Workshop::CompleteWork.call(repository: orders, id: order.id))
+    must_succeed(container.complete_work.call(id: order.id))
   end
 
   # Walks a fresh order up to the point where the quote is with the customer.
@@ -141,25 +143,23 @@ module WorkshopFixtures
     vehicle   = create_vehicle
 
     order = must_succeed(
-      Application::Workshop::OpenServiceOrder.call(
-        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-      )
+      container.open_service_order.call(vehicle_id: vehicle.id)
     )
 
     must_succeed(
-      Application::Workshop::AddServiceToOrder.call(
-        orders: orders, services: services, id: order.id, service_id: service.id
+      container.add_service_to_order.call(
+        id: order.id, service_id: service.id
       )
     )
     must_succeed(
-      Application::Workshop::AddPartToOrder.call(
-        orders: orders, parts: parts, id: order.id, part_id: part.id, quantity: part_quantity
+      container.add_part_to_order.call(
+        id: order.id, part_id: part.id, quantity: part_quantity
       )
     )
-    must_succeed(Application::Workshop::StartDiagnosis.call(repository: orders, id: order.id))
+    must_succeed(container.start_diagnosis.call(id: order.id))
     must_succeed(
-      Application::Workshop::SendQuote.call(
-        repository: orders, id: order.id, diagnosis: "Óleo vencido e filtro saturado"
+      container.send_quote.call(
+        id: order.id, diagnosis: "Óleo vencido e filtro saturado"
       )
     )
   end

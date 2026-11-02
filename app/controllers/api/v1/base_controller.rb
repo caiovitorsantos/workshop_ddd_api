@@ -24,6 +24,10 @@ module Api
 
       private
 
+      # Use cases and repositories come assembled from the composition root;
+      # a controller never picks an implementation itself.
+      def container = @container ||= Infrastructure::Container.new
+
       # The single exit point for use case results.
       def respond_with(result, success: :ok, &serializer)
         if result.success?

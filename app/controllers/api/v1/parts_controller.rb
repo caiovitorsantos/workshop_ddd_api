@@ -28,8 +28,7 @@ module Api
       end
 
       def create
-        result = Application::Inventory::RegisterPart.call(
-          parts: repository,
+        result = container.register_part.call(
           sku: part_params[:sku],
           description: part_params[:description],
           unit_price: part_params[:unit_price],
@@ -57,9 +56,7 @@ module Api
       end
 
       def restock
-        result = Application::Inventory::RestockPart.call(
-          parts: repository, id: params[:id], quantity: params[:quantity]
-        )
+        result = container.restock_part.call(id: params[:id], quantity: params[:quantity])
 
         respond_with(result) { |part| serialize(part) }
       end
@@ -71,9 +68,7 @@ module Api
 
       private
 
-      def repository
-        @repository ||= Infrastructure::Persistence::Repositories::PartsInActiveRecord.new
-      end
+      def repository = container.parts
 
       def part_params
         params.require(:part).permit(

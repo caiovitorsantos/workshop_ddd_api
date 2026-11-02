@@ -10,9 +10,9 @@ RSpec.describe "api/v1/indicators", type: :request do
   def deliver_order_taking(hours)
     order = order_awaiting_approval
 
-    Application::Workshop::ApproveQuote.call(orders: orders, parts: parts, id: order.id)
-    Application::Workshop::CompleteWork.call(repository: orders, id: order.id)
-    Application::Workshop::DeliverVehicle.call(repository: orders, id: order.id)
+    container.approve_quote.call(id: order.id)
+    container.complete_work.call(id: order.id)
+    container.deliver_vehicle.call(id: order.id)
 
     # The domain stamps the timeline; the spec only rewrites it to simulate the
     # passage of time, which is why it reaches for the record directly.

@@ -6,18 +6,17 @@ module Application
     # the conversation stops being about people and cars and starts being about
     # work to be done.
     class OpenServiceOrder < Application::Shared::UseCase
-      def initialize(orders:, vehicles:, customers:, vehicle_id:)
+      def initialize(orders:, vehicles:, customers:)
         @orders = orders
         @vehicles = vehicles
         @customers = customers
-        @vehicle_id = vehicle_id
       end
 
       private
 
-      attr_reader :orders, :vehicles, :customers, :vehicle_id
+      attr_reader :orders, :vehicles, :customers
 
-      def perform
+      def perform(vehicle_id:)
         vehicle = vehicles.find(vehicle_id)
         raise Domain::Shared::Errors::NotFound, "vehicle #{vehicle_id} not found" if vehicle.nil?
 

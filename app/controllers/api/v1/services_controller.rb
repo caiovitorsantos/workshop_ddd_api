@@ -23,8 +23,7 @@ module Api
       end
 
       def create
-        result = Application::Catalog::RegisterService.call(
-          services: repository,
+        result = container.register_service.call(
           name: service_params[:name],
           price: service_params[:price],
           description: service_params[:description],
@@ -67,9 +66,7 @@ module Api
 
       private
 
-      def repository
-        @repository ||= Infrastructure::Persistence::Repositories::ServicesInActiveRecord.new
-      end
+      def repository = container.services
 
       def service_params
         params.require(:service).permit(:name, :description, :price, :estimated_minutes, :active)

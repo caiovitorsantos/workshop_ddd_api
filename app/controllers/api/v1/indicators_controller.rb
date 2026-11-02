@@ -24,9 +24,7 @@ module Api
 
       private
 
-      def repository
-        @repository ||= Infrastructure::Persistence::Repositories::ServiceOrdersInActiveRecord.new
-      end
+      def repository = container.orders
 
       def parse_since
         return nil if params[:since].blank?

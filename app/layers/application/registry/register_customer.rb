@@ -7,24 +7,20 @@ module Application
     # themselves), talk to repositories only through their ports, return a
     # Result.
     class RegisterCustomer < Application::Shared::UseCase
-      def initialize(repository:, tax_id:, name:, email: nil, phone: nil)
-        @repository = repository
-        @tax_id     = tax_id
-        @name       = name
-        @email      = email
-        @phone      = phone
+      def initialize(customers:)
+        @customers = customers
       end
 
       private
 
-      attr_reader :repository, :tax_id, :name, :email, :phone
+      attr_reader :customers
 
-      def perform
+      def perform(tax_id:, name:, email: nil, phone: nil)
         # The value object validates the CPF/CNPJ, so an invalid document never
         # reaches the database in the first place.
         document = Domain::Registry::TaxId.parse(tax_id)
 
-        if repository.find_by_tax_id(document)
+        if customers.find_by_tax_id(document)
           raise Domain::Shared::Errors::AlreadyExists,
                 "a customer with tax id #{document.formatted} already exists"
         end
@@ -33,7 +29,7 @@ module Application
           tax_id: document, name: name, email: email, phone: phone
         )
 
-        repository.save(customer)
+        customers.save(customer)
       end
     end
   end

@@ -2,21 +2,16 @@ module Application
   module Registry
     # Use case: put a vehicle on the books, under an existing customer.
     class RegisterVehicle < Application::Shared::UseCase
-      def initialize(vehicles:, customers:, customer_id:, plate:, make:, model:, year:)
+      def initialize(vehicles:, customers:)
         @vehicles = vehicles
         @customers = customers
-        @customer_id = customer_id
-        @plate = plate
-        @make = make
-        @model = model
-        @year = year
       end
 
       private
 
-      attr_reader :vehicles, :customers, :customer_id, :plate, :make, :model, :year
+      attr_reader :vehicles, :customers
 
-      def perform
+      def perform(customer_id:, plate:, make:, model:, year:)
         # The value object validates the plate, so a malformed one never reaches
         # the database.
         registration = Domain::Registry::LicensePlate.parse(plate)

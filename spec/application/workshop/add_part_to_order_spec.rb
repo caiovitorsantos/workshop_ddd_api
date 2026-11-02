@@ -8,15 +8,13 @@ RSpec.describe Application::Workshop::AddPartToOrder do
   def draft_order
     vehicle = create_vehicle
     must_succeed(
-      Application::Workshop::OpenServiceOrder.call(
-        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-      )
+      container.open_service_order.call(vehicle_id: vehicle.id)
     )
   end
 
   def add(order, part, quantity)
-    described_class.call(
-      orders: orders, parts: parts, id: order.id, part_id: part.id, quantity: quantity
+    described_class.new(orders: orders, parts: parts).call(
+      id: order.id, part_id: part.id, quantity: quantity
     )
   end
 
@@ -90,8 +88,8 @@ RSpec.describe Application::Workshop::AddPartToOrder do
     it "reports a missing order" do
       part = create_part
 
-      result = described_class.call(
-        orders: orders, parts: parts, id: 999_999, part_id: part.id, quantity: 1
+      result = described_class.new(orders: orders, parts: parts).call(
+        id: 999_999, part_id: part.id, quantity: 1
       )
 
       expect(result).to be_failure
@@ -101,8 +99,8 @@ RSpec.describe Application::Workshop::AddPartToOrder do
     it "reports a missing part" do
       order = draft_order
 
-      result = described_class.call(
-        orders: orders, parts: parts, id: order.id, part_id: 999_999, quantity: 1
+      result = described_class.new(orders: orders, parts: parts).call(
+        id: order.id, part_id: 999_999, quantity: 1
       )
 
       expect(result).to be_failure

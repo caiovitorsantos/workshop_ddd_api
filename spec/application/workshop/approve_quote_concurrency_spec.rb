@@ -40,9 +40,7 @@ RSpec.describe "stock movements under concurrency" do
 
   def draft_order
     vehicle = create_vehicle
-    Application::Workshop::OpenServiceOrder.call(
-      orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-    ).value
+    container.open_service_order.call(vehicle_id: vehicle.id).value
   end
 
   it "lets exactly one of two simultaneous additions reserve the last unit" do
@@ -52,9 +50,7 @@ RSpec.describe "stock movements under concurrency" do
 
     results = [ first, second ].map do |order|
       in_own_connection do
-        Application::Workshop::AddPartToOrder.call(
-          orders: Infrastructure::Persistence::Repositories::ServiceOrdersInActiveRecord.new,
-          parts: Infrastructure::Persistence::Repositories::PartsInActiveRecord.new,
+        Infrastructure::Container.new.add_part_to_order.call(
           id: order.id, part_id: part.id, quantity: 1
         )
       end
@@ -76,11 +72,7 @@ RSpec.describe "stock movements under concurrency" do
 
     results = [ first, second ].map do |order|
       in_own_connection do
-        Application::Workshop::ApproveQuote.call(
-          orders: Infrastructure::Persistence::Repositories::ServiceOrdersInActiveRecord.new,
-          parts: Infrastructure::Persistence::Repositories::PartsInActiveRecord.new,
-          id: order.id
-        )
+        Infrastructure::Container.new.approve_quote.call(id: order.id)
       end
     end.map(&:value)
 
@@ -98,10 +90,7 @@ RSpec.describe "stock movements under concurrency" do
 
     numbers = vehicles_to_use.map do |vehicle|
       in_own_connection do
-        Application::Workshop::OpenServiceOrder.call(
-          orders: Infrastructure::Persistence::Repositories::ServiceOrdersInActiveRecord.new,
-          vehicles: Infrastructure::Persistence::Repositories::VehiclesInActiveRecord.new,
-          customers: Infrastructure::Persistence::Repositories::CustomersInActiveRecord.new,
+        Infrastructure::Container.new.open_service_order.call(
           vehicle_id: vehicle.id
         ).value.number
       end

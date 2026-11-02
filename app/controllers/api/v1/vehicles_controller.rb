@@ -20,8 +20,7 @@ module Api
       end
 
       def create
-        result = Application::Registry::RegisterVehicle.call(
-          vehicles: repository, customers: customer_repository,
+        result = container.register_vehicle.call(
           customer_id: params[:customer_id] || vehicle_params[:customer_id],
           plate: vehicle_params[:plate],
           make: vehicle_params[:make],
@@ -56,13 +55,7 @@ module Api
 
       private
 
-      def repository
-        @repository ||= Infrastructure::Persistence::Repositories::VehiclesInActiveRecord.new
-      end
-
-      def customer_repository
-        @customer_repository ||= Infrastructure::Persistence::Repositories::CustomersInActiveRecord.new
-      end
+      def repository = container.vehicles
 
       def vehicle_params
         params.require(:vehicle).permit(:plate, :make, :model, :year, :customer_id)

@@ -13,25 +13,23 @@ module Application
     class ReleasingOrderCommand < Application::Shared::UseCase
       include QuotedPartQuantities
 
-      def initialize(orders:, parts:, id:, reason: nil)
+      def initialize(orders:, parts:)
         @orders = orders
         @parts = parts
-        @id = id
-        @reason = reason
       end
 
       private
 
-      attr_reader :orders, :parts, :id, :reason
+      attr_reader :orders, :parts
 
-      def perform
+      def perform(id:, reason: nil)
         ActiveRecord::Base.transaction do
           order = orders.find(id)
           raise Domain::Shared::Errors::NotFound, "service order #{id} not found" if order.nil?
 
           # Status transition first: an order that cannot be cancelled (already
           # in progress, already closed) fails here, before any stock moves.
-          apply(order)
+          apply(order, reason)
           release_reserved_parts(order)
           orders.save(order)
         end
@@ -48,7 +46,7 @@ module Application
       end
 
       # Subclasses implement this and nothing else.
-      def apply(order)
+      def apply(order, reason)
         raise NotImplementedError, "#{self.class} does not implement #apply"
       end
     end

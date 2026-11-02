@@ -5,7 +5,7 @@ require "rails_helper"
 # are one transaction across two bounded contexts.
 RSpec.describe Application::Workshop::RejectQuote do
   def reject(order, reason: nil)
-    described_class.call(orders: orders, parts: parts, id: order.id, reason: reason)
+    described_class.new(orders: orders, parts: parts).call(id: order.id, reason: reason)
   end
 
   it "cancels the order and marks it as a price rejection" do
@@ -35,16 +35,14 @@ RSpec.describe Application::Workshop::RejectQuote do
     part    = create_part(on_hand: 10)
     vehicle = create_vehicle
 
-    order = Application::Workshop::OpenServiceOrder.call(
-      orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-    ).value
+    order = container.open_service_order.call(vehicle_id: vehicle.id).value
     2.times do
-      Application::Workshop::AddPartToOrder.call(
-        orders: orders, parts: parts, id: order.id, part_id: part.id, quantity: 2
+      container.add_part_to_order.call(
+        id: order.id, part_id: part.id, quantity: 2
       )
     end
-    Application::Workshop::StartDiagnosis.call(repository: orders, id: order.id)
-    Application::Workshop::SendQuote.call(repository: orders, id: order.id, diagnosis: "revisão")
+    container.start_diagnosis.call(id: order.id)
+    container.send_quote.call(id: order.id, diagnosis: "revisão")
 
     reject(orders.find(order.id))
 
@@ -52,7 +50,7 @@ RSpec.describe Application::Workshop::RejectQuote do
   end
 
   it "reports a missing order" do
-    result = described_class.call(orders: orders, parts: parts, id: 999_999)
+    result = described_class.new(orders: orders, parts: parts).call(id: 999_999)
 
     expect(result).to be_failure
     expect(result.code).to eq(:not_found)
@@ -60,7 +58,7 @@ RSpec.describe Application::Workshop::RejectQuote do
 
   it "refuses to reject an order that is already in progress" do
     order = order_awaiting_approval
-    Application::Workshop::ApproveQuote.call(orders: orders, parts: parts, id: order.id)
+    container.approve_quote.call(id: order.id)
 
     result = reject(orders.find(order.id))
 

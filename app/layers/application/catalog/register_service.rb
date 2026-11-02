@@ -2,19 +2,15 @@ module Application
   module Catalog
     # Use case: add a service to what the workshop offers.
     class RegisterService < Application::Shared::UseCase
-      def initialize(services:, name:, price:, description: nil, estimated_minutes: nil)
+      def initialize(services:)
         @services = services
-        @name = name
-        @price = price
-        @description = description
-        @estimated_minutes = estimated_minutes
       end
 
       private
 
-      attr_reader :services, :name, :price, :description, :estimated_minutes
+      attr_reader :services
 
-      def perform
+      def perform(name:, price:, description: nil, estimated_minutes: nil)
         services.save(
           Domain::Catalog::Service.new(
             name: name,

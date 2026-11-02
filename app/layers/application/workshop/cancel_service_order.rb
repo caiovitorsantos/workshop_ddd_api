@@ -19,7 +19,7 @@ module Application
     class CancelServiceOrder < ReleasingOrderCommand
       private
 
-      def apply(order) = order.cancel!(reason: reason)
+      def apply(order, reason) = order.cancel!(reason: reason)
     end
   end
 end

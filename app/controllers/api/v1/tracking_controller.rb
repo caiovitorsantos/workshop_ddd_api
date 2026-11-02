@@ -54,9 +54,7 @@ module Api
 
       private
 
-      def repository
-        @repository ||= Infrastructure::Persistence::Repositories::ServiceOrdersInActiveRecord.new
-      end
+      def repository = container.orders
 
       def serialize(order)
         {

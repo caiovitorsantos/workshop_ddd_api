@@ -23,17 +23,16 @@ module Application
     class ApproveQuote < Application::Shared::UseCase
       include QuotedPartQuantities
 
-      def initialize(orders:, parts:, id:)
+      def initialize(orders:, parts:)
         @orders = orders
         @parts = parts
-        @id = id
       end
 
       private
 
-      attr_reader :orders, :parts, :id
+      attr_reader :orders, :parts
 
-      def perform
+      def perform(id:)
         # One transaction spans both contexts. Rolling back undoes the stock
         # movements together with the status change — there is no window where
         # one landed and the other did not.

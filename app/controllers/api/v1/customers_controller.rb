@@ -20,8 +20,7 @@ module Api
       end
 
       def create
-        result = Application::Registry::RegisterCustomer.call(
-          repository: repository,
+        result = container.register_customer.call(
           tax_id: customer_params[:tax_id],
           name: customer_params[:name],
           email: customer_params[:email],
@@ -55,9 +54,7 @@ module Api
 
       private
 
-      def repository
-        @repository ||= Infrastructure::Persistence::Repositories::CustomersInActiveRecord.new
-      end
+      def repository = container.customers
 
       def customer_params
         params.require(:customer).permit(:tax_id, :name, :email, :phone)

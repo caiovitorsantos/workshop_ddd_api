@@ -197,10 +197,7 @@ RSpec.describe "api/v1/service_orders", type: :request do
       response "200", "part added, stock reserved" do
         let(:part) { create_part(on_hand: 10) }
         let(:id) do
-          Application::Workshop::OpenServiceOrder.call(
-            orders: orders, vehicles: vehicles, customers: customers,
-            vehicle_id: create_vehicle.id
-          ).value.id
+          container.open_service_order.call(vehicle_id: create_vehicle.id).value.id
         end
         let(:body) { { item: { part_id: part.id, quantity: 3 } } }
 
@@ -216,10 +213,7 @@ RSpec.describe "api/v1/service_orders", type: :request do
 
         let(:part) { create_part(on_hand: 1) }
         let(:id) do
-          Application::Workshop::OpenServiceOrder.call(
-            orders: orders, vehicles: vehicles, customers: customers,
-            vehicle_id: create_vehicle.id
-          ).value.id
+          container.open_service_order.call(vehicle_id: create_vehicle.id).value.id
         end
         let(:body) { { item: { part_id: part.id, quantity: 2 } } }
 
@@ -337,10 +331,7 @@ RSpec.describe "api/v1/service_orders", type: :request do
 
         # A freshly opened order has not been quoted yet.
         let(:id) do
-          Application::Workshop::OpenServiceOrder.call(
-            orders: orders, vehicles: vehicles, customers: customers,
-            vehicle_id: create_vehicle.id
-          ).value.id
+          container.open_service_order.call(vehicle_id: create_vehicle.id).value.id
         end
 
         run_test!

@@ -6,17 +6,15 @@ module Application
     # goes down. Neither is an edit to a number: both are movements the
     # aggregate records and publishes an event for.
     class RestockPart < Application::Shared::UseCase
-      def initialize(parts:, id:, quantity:)
+      def initialize(parts:)
         @parts = parts
-        @id = id
-        @quantity = quantity
       end
 
       private
 
-      attr_reader :parts, :id, :quantity
+      attr_reader :parts
 
-      def perform
+      def perform(id:, quantity:)
         # Locked for the same reason approval locks: a restock landing between
         # another transaction's read and write would be lost.
         ActiveRecord::Base.transaction do
