@@ -344,25 +344,3 @@ Todos exigem `Authorization: Bearer <token>`, exceto o acompanhamento.
 | `POST` | `/service_orders/:id/complete` · `deliver` | → Finalizada → Entregue |
 | `GET` | `/indicators/average_execution_time` | Tempo médio (`?since=`) |
 | `GET` | **`/tracking/:number`** | **Acompanhamento público, sem token** |
-
----
-
-## Estado atual
-
-Implementado e testado ponta a ponta — **200 exemplos, 0 falhas, 96,39% de
-cobertura de linha**. Os cinco contextos delimitados estão completos, do domínio
-ao endpoint. O estoque segue o ciclo de duas fases do Event Storming: a peça é
-**reservada** ao entrar na OS, **baixada** na aprovação e **liberada** se a OS
-for reprovada ou cancelada antes da aprovação.
-
-Fora do escopo desta fase, com a justificativa registrada no
-[plano do projeto](../PLANO_TECH_CHALLENGE.md):
-
-- **Aprovação parcial de orçamento** — o MVP é tudo-ou-nada (PA-4)
-- **Cancelar OS já em execução** — a máquina de estados proíbe; permitir isso
-  exige, junto, o estorno da **baixa** já feita (PA-6; a liberação de reserva,
-  PA-3, já existe)
-- **Média de execução por serviço** — não é derivável: uma OS com três serviços
-  tem uma duração só. Exigiria copiar `estimated_minutes` para o `ServiceItem`
-- **Canal de notificação ao cliente** — modelado como sistema externo; a OS muda
-  de status e o cliente consulta pela rota pública
