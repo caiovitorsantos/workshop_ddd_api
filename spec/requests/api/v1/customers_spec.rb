@@ -15,6 +15,7 @@ RSpec.describe "api/v1/customers", type: :request do
   end
 
   let(:Authorization) { "Bearer #{Infrastructure::Auth::JwtToken.issue(user)}" }
+  let(:auth_headers) { { "Authorization" => send(:Authorization) } }
 
   path "/api/v1/customers" do
     post "Registers a customer" do
