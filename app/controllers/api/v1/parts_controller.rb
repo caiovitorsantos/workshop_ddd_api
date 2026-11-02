@@ -14,17 +14,11 @@ module Api
           below_minimum: params[:below_minimum].present?
         )
 
-        render json: {
-          data: parts.map { |p| serialize(p) },
-          pagination: { page: page, per_page: per_page, total: total }
-        }
+        render_page(parts, total, with: PartPresenter)
       end
 
       def show
-        part = repository.find(params[:id])
-        return render_error("part not found", :not_found) unless part
-
-        render json: serialize(part)
+        render_found(repository.find(params[:id]), with: PartPresenter, missing: "part")
       end
 
       def create
@@ -36,7 +30,7 @@ module Api
           minimum_stock: part_params.fetch(:minimum_stock, 0)
         )
 
-        respond_with(result, success: :created) { |part| serialize(part) }
+        respond_with(result, with: PartPresenter, success: :created)
       end
 
       # `quantity_on_hand` is deliberately not among the changes passed on.
@@ -45,13 +39,13 @@ module Api
           id: params[:id], **changes_from(part_params, :description, :unit_price, :minimum_stock)
         )
 
-        respond_with(result) { |part| serialize(part) }
+        respond_with(result, with: PartPresenter)
       end
 
       def restock
         result = container.restock_part.call(id: params[:id], quantity: params[:quantity])
 
-        respond_with(result) { |part| serialize(part) }
+        respond_with(result, with: PartPresenter)
       end
 
       def destroy
@@ -66,20 +60,6 @@ module Api
         params.require(:part).permit(
           :sku, :description, :unit_price, :quantity_on_hand, :minimum_stock
         )
-      end
-
-      def serialize(part)
-        {
-          id: part.id,
-          sku: part.sku,
-          description: part.description,
-          unit_price: part.unit_price.amount.to_s("F"),
-          quantity_on_hand: part.quantity_on_hand,
-          quantity_reserved: part.quantity_reserved,
-          available: part.available_quantity,
-          minimum_stock: part.minimum_stock,
-          below_minimum: part.below_minimum?
-        }
       end
     end
   end

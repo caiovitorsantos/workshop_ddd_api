@@ -1,22 +1,16 @@
 module Api
   module V1
     # Customer CRUD. Reference vertical slice for the interface layer: take
-    # params, call the use case, serialize the result. Nothing beyond that.
+    # params, call the use case, present the result. Nothing beyond that.
     class CustomersController < BaseController
       def index
         customers, total = repository.list(page: page, per_page: per_page, query: params[:q])
 
-        render json: {
-          data: customers.map { |c| serialize(c) },
-          pagination: { page: page, per_page: per_page, total: total }
-        }
+        render_page(customers, total, with: CustomerPresenter)
       end
 
       def show
-        customer = repository.find(params[:id])
-        return render_error("customer not found", :not_found) unless customer
-
-        render json: serialize(customer)
+        render_found(repository.find(params[:id]), with: CustomerPresenter, missing: "customer")
       end
 
       def create
@@ -27,7 +21,7 @@ module Api
           phone: customer_params[:phone]
         )
 
-        respond_with(result, success: :created) { |customer| serialize(customer) }
+        respond_with(result, with: CustomerPresenter, success: :created)
       end
 
       # `tax_id` is not among the changes passed on: it is the customer's
@@ -37,7 +31,7 @@ module Api
           id: params[:id], **changes_from(customer_params, :name, :email, :phone)
         )
 
-        respond_with(result) { |customer| serialize(customer) }
+        respond_with(result, with: CustomerPresenter)
       end
 
       def destroy
@@ -50,17 +44,6 @@ module Api
 
       def customer_params
         params.require(:customer).permit(:tax_id, :name, :email, :phone)
-      end
-
-      def serialize(customer)
-        {
-          id: customer.id,
-          tax_id: customer.tax_id.formatted,
-          tax_id_kind: customer.tax_id.kind,
-          name: customer.name,
-          email: customer.email,
-          phone: customer.phone
-        }
       end
     end
   end

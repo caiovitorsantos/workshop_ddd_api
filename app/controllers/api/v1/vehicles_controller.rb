@@ -9,14 +9,11 @@ module Api
 
         vehicles = repository.list_for_customer(params[:customer_id])
 
-        render json: { data: vehicles.map { |v| serialize(v) } }
+        render json: { data: vehicles.map { |vehicle| VehiclePresenter.call(vehicle) } }
       end
 
       def show
-        vehicle = repository.find(params[:id])
-        return render_error("vehicle not found", :not_found) unless vehicle
-
-        render json: serialize(vehicle)
+        render_found(repository.find(params[:id]), with: VehiclePresenter, missing: "vehicle")
       end
 
       def create
@@ -28,7 +25,7 @@ module Api
           year: vehicle_params[:year]
         )
 
-        respond_with(result, success: :created) { |vehicle| serialize(vehicle) }
+        respond_with(result, with: VehiclePresenter, success: :created)
       end
 
       # The plate is not among the changes passed on — it is the vehicle's
@@ -38,7 +35,7 @@ module Api
           id: params[:id], **changes_from(vehicle_params, :make, :model, :year)
         )
 
-        respond_with(result) { |vehicle| serialize(vehicle) }
+        respond_with(result, with: VehiclePresenter)
       end
 
       def destroy
@@ -51,18 +48,6 @@ module Api
 
       def vehicle_params
         params.require(:vehicle).permit(:plate, :make, :model, :year, :customer_id)
-      end
-
-      def serialize(vehicle)
-        {
-          id: vehicle.id,
-          plate: vehicle.plate.formatted,
-          make: vehicle.make,
-          model: vehicle.model,
-          year: vehicle.year,
-          customer_id: vehicle.customer_id,
-          description: vehicle.description
-        }
       end
     end
   end
