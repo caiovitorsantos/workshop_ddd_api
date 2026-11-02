@@ -4,7 +4,9 @@ require "rails_helper"
 # Runs against the real repositories: the status change and the stock release
 # are one transaction across two bounded contexts.
 RSpec.describe Application::Workshop::RejectQuote do
-  subject(:use_case) { described_class.new(orders: orders, parts: parts, transaction: transaction) }
+  subject(:use_case) do
+    described_class.new(orders: orders, parts: parts, transaction: transaction, events: events)
+  end
 
   def reject(order, reason: nil)
     use_case.call(id: order.id, reason: reason)
@@ -49,6 +51,14 @@ RSpec.describe Application::Workshop::RejectQuote do
     reject(orders.find(order.id))
 
     expect(parts.find(part.id).quantity_reserved).to eq(0)
+  end
+
+  it "publishes the rejection and the stock it gave back" do
+    order = order_awaiting_approval
+
+    reject(order)
+
+    expect(events.names).to eq(%w[quote_rejected stock_released])
   end
 
   it "reports a missing order" do

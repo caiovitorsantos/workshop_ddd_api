@@ -6,15 +6,16 @@ module Application
     # the conversation stops being about people and cars and starts being about
     # work to be done.
     class OpenServiceOrder < Application::Shared::UseCase
-      def initialize(orders:, vehicles:, customers:)
+      def initialize(orders:, vehicles:, customers:, events:)
         @orders = orders
         @vehicles = vehicles
         @customers = customers
+        @events = events
       end
 
       private
 
-      attr_reader :orders, :vehicles, :customers
+      attr_reader :orders, :vehicles, :customers, :events
 
       def perform(vehicle_id:)
         vehicle = vehicles.find(vehicle_id)
@@ -32,7 +33,7 @@ module Application
           vehicle_id: vehicle.id
         )
 
-        orders.save(order)
+        orders.save(order).tap { publish_events_of(order) }
       end
     end
   end

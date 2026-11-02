@@ -6,14 +6,15 @@ module Application
     # that moment the order owns its own number: a later price change in the
     # catalog cannot rewrite a quote the customer has already seen.
     class AddServiceToOrder < Application::Shared::UseCase
-      def initialize(orders:, services:)
+      def initialize(orders:, services:, events:)
         @orders = orders
         @services = services
+        @events = events
       end
 
       private
 
-      attr_reader :orders, :services
+      attr_reader :orders, :services, :events
 
       def perform(id:, service_id:, quantity: 1)
         order = orders.find(id)
@@ -34,7 +35,7 @@ module Application
           quantity: quantity
         )
 
-        orders.save(order)
+        orders.save(order).tap { publish_events_of(order) }
       end
     end
   end

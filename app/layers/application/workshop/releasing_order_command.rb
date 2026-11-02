@@ -13,36 +13,42 @@ module Application
     class ReleasingOrderCommand < Application::Shared::UseCase
       include QuotedPartQuantities
 
-      def initialize(orders:, parts:, transaction:)
+      def initialize(orders:, parts:, transaction:, events:)
         @orders = orders
         @parts = parts
         @transaction = transaction
+        @events = events
       end
 
       private
 
-      attr_reader :orders, :parts, :transaction
+      attr_reader :orders, :parts, :transaction, :events
 
       def perform(id:, reason: nil)
-        transaction.within do
+        order, released_parts, saved = transaction.within do
           order = orders.find(id)
           raise Domain::Shared::Errors::NotFound, "service order #{id} not found" if order.nil?
 
           # Status transition first: an order that cannot be cancelled (already
           # in progress, already closed) fails here, before any stock moves.
           apply(order, reason)
-          release_reserved_parts(order)
-          orders.save(order)
+          released_parts = release_reserved_parts(order)
+          [ order, released_parts, orders.save(order) ]
         end
+
+        publish_events_of(order, *released_parts)
+        saved
       end
 
+      # Returns the parts it released, so their events can be published.
       def release_reserved_parts(order)
-        quantities_by_part(order).each do |part_id, quantity|
+        quantities_by_part(order).map do |part_id, quantity|
           part = parts.find_for_update(part_id)
           raise Domain::Shared::Errors::NotFound, "part #{part_id} not found" if part.nil?
 
           part.release!(quantity, service_order_id: order.id)
           parts.save(part)
+          part
         end
       end
 

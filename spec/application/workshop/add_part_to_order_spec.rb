@@ -5,7 +5,9 @@ require "rails_helper"
 # repositories and PostgreSQL — the reservation and the order line land in one
 # transaction, and a rollback has to undo both.
 RSpec.describe Application::Workshop::AddPartToOrder do
-  subject(:use_case) { described_class.new(orders: orders, parts: parts, transaction: transaction) }
+  subject(:use_case) do
+    described_class.new(orders: orders, parts: parts, transaction: transaction, events: events)
+  end
 
   def draft_order
     vehicle = create_vehicle
@@ -63,6 +65,18 @@ RSpec.describe Application::Workshop::AddPartToOrder do
 
       expect(orders.find(order.id).part_items).to be_empty
       expect(parts.find(part.id).quantity_reserved).to eq(0)
+    end
+
+    # The part does record InsufficientStockDetected before refusing, but the
+    # command failed and its unit of work rolled back: events are published
+    # only for work that was kept.
+    it "publishes nothing" do
+      part  = create_part(on_hand: 2)
+      order = draft_order
+
+      add(order, part, 3)
+
+      expect(events.published).to be_empty
     end
 
     it "counts stock already reserved by the same order" do

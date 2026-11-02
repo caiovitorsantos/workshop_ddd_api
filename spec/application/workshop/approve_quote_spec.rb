@@ -11,7 +11,9 @@ require "rails_helper"
 # of stock — that check moved to the moment the part was added. What approval
 # does is turn each reservation into a real deduction.
 RSpec.describe Application::Workshop::ApproveQuote do
-  subject(:use_case) { described_class.new(orders: orders, parts: parts, transaction: transaction) }
+  subject(:use_case) do
+    described_class.new(orders: orders, parts: parts, transaction: transaction, events: events)
+  end
 
   def approve(order)
     use_case.call(id: order.id)
@@ -96,6 +98,26 @@ RSpec.describe Application::Workshop::ApproveQuote do
       approve(orders.find(order.id))
 
       expect(parts.find(part.id).quantity_on_hand).to eq(7)
+    end
+  end
+
+  describe "domain events" do
+    it "publishes what both contexts recorded, once the work is saved" do
+      part  = create_part(on_hand: 10, minimum: 2)
+      order = order_awaiting_approval(part: part, part_quantity: 3)
+
+      approve(order)
+
+      expect(events.names).to eq(%w[quote_approved work_started stock_deducted])
+      expect(events.published.map(&:aggregate_id)).to eq([ order.id, order.id, part.id ])
+    end
+
+    it "publishes nothing when the approval is refused" do
+      order = order_in_progress
+
+      approve(order)
+
+      expect(events.published).to be_empty
     end
   end
 

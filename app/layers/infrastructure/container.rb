@@ -28,9 +28,10 @@ module Infrastructure
     def orders    = @orders    ||= Repositories::ServiceOrdersInActiveRecord.new
     def users     = @users     ||= Repositories::UsersInActiveRecord.new
 
-    # --- Ports: unit of work ---------------------------------------------------
+    # --- Ports: unit of work and domain events ---------------------------------
 
     def transaction = @transaction ||= Persistence::ActiveRecordTransactionManager.new
+    def events      = @events      ||= Events::LoggingPublisher.new(logger: Rails.logger)
 
     # --- Use cases: Registry ---------------------------------------------------
 
@@ -72,27 +73,31 @@ module Infrastructure
 
     # Locks the part's row while it adds the delivery, hence the unit of work.
     def restock_part
-      Application::Inventory::RestockPart.new(parts: parts, transaction: transaction)
+      Application::Inventory::RestockPart.new(
+        parts: parts, transaction: transaction, events: events
+      )
     end
 
     # --- Use cases: Workshop ---------------------------------------------------
 
     def open_service_order
       Application::Workshop::OpenServiceOrder.new(
-        orders: orders, vehicles: vehicles, customers: customers
+        orders: orders, vehicles: vehicles, customers: customers, events: events
       )
     end
 
     def add_service_to_order
-      Application::Workshop::AddServiceToOrder.new(orders: orders, services: services)
+      Application::Workshop::AddServiceToOrder.new(
+        orders: orders, services: services, events: events
+      )
     end
 
     def add_part_to_order = moving_stock(Application::Workshop::AddPartToOrder)
 
-    def start_diagnosis = Application::Workshop::StartDiagnosis.new(orders: orders)
-    def send_quote      = Application::Workshop::SendQuote.new(orders: orders)
-    def complete_work   = Application::Workshop::CompleteWork.new(orders: orders)
-    def deliver_vehicle = Application::Workshop::DeliverVehicle.new(orders: orders)
+    def start_diagnosis = order_command(Application::Workshop::StartDiagnosis)
+    def send_quote      = order_command(Application::Workshop::SendQuote)
+    def complete_work   = order_command(Application::Workshop::CompleteWork)
+    def deliver_vehicle = order_command(Application::Workshop::DeliverVehicle)
 
     def approve_quote        = moving_stock(Application::Workshop::ApproveQuote)
     def reject_quote         = moving_stock(Application::Workshop::RejectQuote)
@@ -100,10 +105,13 @@ module Infrastructure
 
     private
 
+    # Life cycle commands that touch only the order.
+    def order_command(use_case) = use_case.new(orders: orders, events: events)
+
     # Commands that move an order *and* a part's stock: two bounded contexts,
-    # one unit of work, so they all get the same three collaborators.
+    # one unit of work, so they all get the same collaborators.
     def moving_stock(use_case)
-      use_case.new(orders: orders, parts: parts, transaction: transaction)
+      use_case.new(orders: orders, parts: parts, transaction: transaction, events: events)
     end
   end
 end

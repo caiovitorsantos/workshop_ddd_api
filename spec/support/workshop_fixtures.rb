@@ -14,6 +14,9 @@ module WorkshopFixtures
   def container = Infrastructure::Container.new
   def transaction = Infrastructure::Persistence::ActiveRecordTransactionManager.new
 
+  # For specs that build a use case by hand: records what it publishes.
+  def events = @events ||= RecordingPublisher.new
+
   # Unique-by-default identifiers.
   #
   # Most specs run inside a transaction that rolls back, so collisions never

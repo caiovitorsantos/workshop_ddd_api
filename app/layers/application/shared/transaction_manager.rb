@@ -11,8 +11,9 @@ module Application
     #     ...  # every repository call in here commits or rolls back together
     #   end
     #
-    # An exception raised inside the block rolls the work back and propagates,
-    # so a domain error still reaches UseCase#call and becomes a Result.
+    # Returns the block's value. An exception raised inside the block rolls the
+    # work back and propagates, so a domain error still reaches UseCase#call
+    # and becomes a Result.
     #
     # The adapter is Infrastructure::Persistence::ActiveRecordTransactionManager.
     class TransactionManager

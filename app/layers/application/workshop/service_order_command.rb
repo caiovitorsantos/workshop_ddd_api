@@ -12,13 +12,14 @@ module Application
     # authorisation story. Collapsing them into `TransitionOrder.call(:approve)`
     # would save a few lines and lose the ubiquitous language.
     class ServiceOrderCommand < Application::Shared::UseCase
-      def initialize(orders:)
+      def initialize(orders:, events:)
         @orders = orders
+        @events = events
       end
 
       private
 
-      attr_reader :orders
+      attr_reader :orders, :events
 
       # Whatever a command needs beyond the order's id (a diagnosis, say) is
       # passed straight through to its #apply as keywords.
@@ -27,7 +28,7 @@ module Application
         raise Domain::Shared::Errors::NotFound, "service order #{id} not found" if order.nil?
 
         apply(order, **command_input)
-        orders.save(order)
+        orders.save(order).tap { publish_events_of(order) }
       end
 
       # Subclasses implement this and nothing else.
