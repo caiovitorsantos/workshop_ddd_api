@@ -47,3 +47,59 @@ jobs:
       - name: Lint code for consistent style
         run: bin/rubocop -f github
 
+  # The full suite against a real PostgreSQL, same major version as
+  # docker-compose. Integration specs need it: the stock-concurrency spec opens
+  # two real connections and relies on SELECT ... FOR UPDATE, which an
+  # in-memory database could not prove.
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      RAILS_ENV: test
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      # GitHub sets CI=true, which turns on eager_load in config/environments/test.rb:
+      # a file Zeitwerk cannot load fails here rather than in production.
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Prepare the test database
+        run: bin/rails db:create db:schema:load
+
+      # The coverage gate (80% line / 70% branch) lives in spec/rails_helper.rb,
+      # so a drop below it fails this step on its own.
+      - name: Run the test suite
+        run: bundle exec rspec --format progress
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 14
+          if-no-files-found: ignore
+
