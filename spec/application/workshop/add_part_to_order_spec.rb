@@ -5,6 +5,8 @@ require "rails_helper"
 # repositories and PostgreSQL — the reservation and the order line land in one
 # transaction, and a rollback has to undo both.
 RSpec.describe Application::Workshop::AddPartToOrder do
+  subject(:use_case) { described_class.new(orders: orders, parts: parts, transaction: transaction) }
+
   def draft_order
     vehicle = create_vehicle
     must_succeed(
@@ -13,7 +15,7 @@ RSpec.describe Application::Workshop::AddPartToOrder do
   end
 
   def add(order, part, quantity)
-    described_class.new(orders: orders, parts: parts).call(
+    use_case.call(
       id: order.id, part_id: part.id, quantity: quantity
     )
   end
@@ -88,7 +90,7 @@ RSpec.describe Application::Workshop::AddPartToOrder do
     it "reports a missing order" do
       part = create_part
 
-      result = described_class.new(orders: orders, parts: parts).call(
+      result = use_case.call(
         id: 999_999, part_id: part.id, quantity: 1
       )
 
@@ -99,7 +101,7 @@ RSpec.describe Application::Workshop::AddPartToOrder do
     it "reports a missing part" do
       order = draft_order
 
-      result = described_class.new(orders: orders, parts: parts).call(
+      result = use_case.call(
         id: order.id, part_id: 999_999, quantity: 1
       )
 

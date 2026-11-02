@@ -12,6 +12,7 @@ module WorkshopFixtures
   # Use cases come wired by the same composition root production uses, so a
   # spec exercises the real assembly, not a hand-built approximation of it.
   def container = Infrastructure::Container.new
+  def transaction = Infrastructure::Persistence::ActiveRecordTransactionManager.new
 
   # Unique-by-default identifiers.
   #

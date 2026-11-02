@@ -13,17 +13,18 @@ module Application
     # contexts, like approval: a rollback has to undo both, or the order would
     # quote a part the shelf is not holding.
     class AddPartToOrder < Application::Shared::UseCase
-      def initialize(orders:, parts:)
+      def initialize(orders:, parts:, transaction:)
         @orders = orders
         @parts = parts
+        @transaction = transaction
       end
 
       private
 
-      attr_reader :orders, :parts
+      attr_reader :orders, :parts, :transaction
 
       def perform(id:, part_id:, quantity:)
-        ActiveRecord::Base.transaction do
+        transaction.within do
           order = orders.find(id)
           raise Domain::Shared::Errors::NotFound, "service order #{id} not found" if order.nil?
 

@@ -23,20 +23,21 @@ module Application
     class ApproveQuote < Application::Shared::UseCase
       include QuotedPartQuantities
 
-      def initialize(orders:, parts:)
+      def initialize(orders:, parts:, transaction:)
         @orders = orders
         @parts = parts
+        @transaction = transaction
       end
 
       private
 
-      attr_reader :orders, :parts
+      attr_reader :orders, :parts, :transaction
 
       def perform(id:)
         # One transaction spans both contexts. Rolling back undoes the stock
         # movements together with the status change — there is no window where
         # one landed and the other did not.
-        ActiveRecord::Base.transaction do
+        transaction.within do
           order = orders.find(id)
           raise Domain::Shared::Errors::NotFound, "service order #{id} not found" if order.nil?
 

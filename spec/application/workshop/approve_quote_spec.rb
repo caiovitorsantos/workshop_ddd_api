@@ -11,8 +11,10 @@ require "rails_helper"
 # of stock — that check moved to the moment the part was added. What approval
 # does is turn each reservation into a real deduction.
 RSpec.describe Application::Workshop::ApproveQuote do
+  subject(:use_case) { described_class.new(orders: orders, parts: parts, transaction: transaction) }
+
   def approve(order)
-    described_class.new(orders: orders, parts: parts).call(id: order.id)
+    use_case.call(id: order.id)
   end
 
   describe "the happy path" do
@@ -70,7 +72,7 @@ RSpec.describe Application::Workshop::ApproveQuote do
 
   describe "guards" do
     it "reports a missing order rather than exploding" do
-      result = described_class.new(orders: orders, parts: parts).call(id: 999_999)
+      result = use_case.call(id: 999_999)
 
       expect(result).to be_failure
       expect(result.code).to eq(:not_found)

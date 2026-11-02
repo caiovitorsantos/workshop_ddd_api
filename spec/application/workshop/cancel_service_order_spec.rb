@@ -5,8 +5,10 @@ require "rails_helper"
 # rejection, it can happen before a quote ever existed. Runs against the real
 # repositories: status change and stock release are one transaction.
 RSpec.describe Application::Workshop::CancelServiceOrder do
+  subject(:use_case) { described_class.new(orders: orders, parts: parts, transaction: transaction) }
+
   def cancel(order, reason: nil)
-    described_class.new(orders: orders, parts: parts).call(id: order.id, reason: reason)
+    use_case.call(id: order.id, reason: reason)
   end
 
   def draft_order
@@ -46,7 +48,7 @@ RSpec.describe Application::Workshop::CancelServiceOrder do
   end
 
   it "reports a missing order" do
-    result = described_class.new(orders: orders, parts: parts).call(id: 999_999)
+    result = use_case.call(id: 999_999)
 
     expect(result).to be_failure
     expect(result.code).to eq(:not_found)

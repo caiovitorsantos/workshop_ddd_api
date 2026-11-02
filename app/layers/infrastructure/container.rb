@@ -28,6 +28,10 @@ module Infrastructure
     def orders    = @orders    ||= Repositories::ServiceOrdersInActiveRecord.new
     def users     = @users     ||= Repositories::UsersInActiveRecord.new
 
+    # --- Ports: unit of work ---------------------------------------------------
+
+    def transaction = @transaction ||= Persistence::ActiveRecordTransactionManager.new
+
     # --- Use cases: Registry ---------------------------------------------------
 
     def register_customer
@@ -64,8 +68,12 @@ module Infrastructure
 
     def register_part = Application::Inventory::RegisterPart.new(parts: parts)
     def revise_part   = Application::Inventory::RevisePart.new(parts: parts)
-    def restock_part  = Application::Inventory::RestockPart.new(parts: parts)
     def remove_part   = Application::Inventory::RemovePart.new(parts: parts)
+
+    # Locks the part's row while it adds the delivery, hence the unit of work.
+    def restock_part
+      Application::Inventory::RestockPart.new(parts: parts, transaction: transaction)
+    end
 
     # --- Use cases: Workshop ---------------------------------------------------
 
@@ -79,21 +87,23 @@ module Infrastructure
       Application::Workshop::AddServiceToOrder.new(orders: orders, services: services)
     end
 
-    def add_part_to_order
-      Application::Workshop::AddPartToOrder.new(orders: orders, parts: parts)
-    end
+    def add_part_to_order = moving_stock(Application::Workshop::AddPartToOrder)
 
     def start_diagnosis = Application::Workshop::StartDiagnosis.new(orders: orders)
     def send_quote      = Application::Workshop::SendQuote.new(orders: orders)
     def complete_work   = Application::Workshop::CompleteWork.new(orders: orders)
     def deliver_vehicle = Application::Workshop::DeliverVehicle.new(orders: orders)
 
-    # The three commands that move stock as well as the order.
-    def approve_quote = Application::Workshop::ApproveQuote.new(orders: orders, parts: parts)
-    def reject_quote  = Application::Workshop::RejectQuote.new(orders: orders, parts: parts)
+    def approve_quote        = moving_stock(Application::Workshop::ApproveQuote)
+    def reject_quote         = moving_stock(Application::Workshop::RejectQuote)
+    def cancel_service_order = moving_stock(Application::Workshop::CancelServiceOrder)
 
-    def cancel_service_order
-      Application::Workshop::CancelServiceOrder.new(orders: orders, parts: parts)
+    private
+
+    # Commands that move an order *and* a part's stock: two bounded contexts,
+    # one unit of work, so they all get the same three collaborators.
+    def moving_stock(use_case)
+      use_case.new(orders: orders, parts: parts, transaction: transaction)
     end
   end
 end

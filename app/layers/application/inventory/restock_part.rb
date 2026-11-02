@@ -6,18 +6,19 @@ module Application
     # goes down. Neither is an edit to a number: both are movements the
     # aggregate records and publishes an event for.
     class RestockPart < Application::Shared::UseCase
-      def initialize(parts:)
+      def initialize(parts:, transaction:)
         @parts = parts
+        @transaction = transaction
       end
 
       private
 
-      attr_reader :parts
+      attr_reader :parts, :transaction
 
       def perform(id:, quantity:)
         # Locked for the same reason approval locks: a restock landing between
         # another transaction's read and write would be lost.
-        ActiveRecord::Base.transaction do
+        transaction.within do
           part = parts.find_for_update(id)
           raise Domain::Shared::Errors::NotFound, "part #{id} not found" if part.nil?
 
