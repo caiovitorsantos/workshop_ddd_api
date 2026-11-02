@@ -6,6 +6,7 @@ module Api
     #
     #   summary — one line of a listing. Leaves the items out: a page of 25
     #             orders would otherwise drag a few hundred rows nobody reads.
+    #   status  — just where the order stands, for GET /service_orders/:id/status.
     #   call    — the full order, with the quote, its lines and the timeline.
     module ServiceOrderPresenter
       module_function
@@ -22,6 +23,8 @@ module Api
           opened_at: order.opened_at
         }
       end
+
+      def status(order) = summary(order).slice(:id, :number, :status, :status_label)
 
       def call(order)
         summary(order).merge(

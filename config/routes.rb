@@ -37,6 +37,8 @@ Rails.application.routes.draw do
       # machine over to whoever calls the API.
       resources :service_orders, only: [ :index, :show, :create ] do
         member do
+          get :status
+
           post :add_service
           post :add_part
 

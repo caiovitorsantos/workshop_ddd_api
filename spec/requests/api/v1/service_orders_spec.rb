@@ -66,6 +66,26 @@ RSpec.describe "api/v1/service_orders", type: :request do
           expect(payload["data"].first).not_to have_key("part_items") # listing is a summary
         end
       end
+
+      response "200", "open orders by priority, oldest first; finished ones left out" do
+        let!(:old_draft)  { draft_order }
+        let!(:delivered)  { must_succeed(container.deliver_vehicle.call(id: order_completed.id)) }
+        let!(:completed)  { order_completed }
+        let!(:cancelled)  { must_succeed(container.cancel_service_order.call(id: draft_order.id)) }
+        let!(:diagnosing) { order_in_diagnosis }
+        let!(:awaiting)   { order_awaiting_approval }
+        let!(:running)    { order_in_progress }
+        let!(:new_draft)  { draft_order }
+
+        run_test! do |response|
+          numbers = JSON.parse(response.body)["data"].map { |order| order["number"] }
+
+          expect(numbers).to eq(
+            [ running, awaiting, diagnosing, old_draft, new_draft ].map(&:number)
+          )
+          expect(JSON.parse(response.body)["pagination"]["total"]).to eq(5)
+        end
+      end
     end
   end
 
@@ -85,6 +105,36 @@ RSpec.describe "api/v1/service_orders", type: :request do
           expect(payload["quote"]["total"]).to eq("210.0")   # 120 labour + 2 x 45 parts
           expect(payload["service_items"].size).to eq(1)
           expect(payload["part_items"].size).to eq(1)
+        end
+      end
+
+      response "404", "order not found" do
+        schema "$ref" => "#/components/schemas/Error"
+
+        let(:id) { 999_999 }
+
+        run_test!
+      end
+    end
+  end
+
+  path "/api/v1/service_orders/{id}/status" do
+    parameter name: :id, in: :path, type: :integer, required: true
+
+    get "Fetches only the order's current status" do
+      tags "Service orders"
+      produces "application/json"
+      security [ bearer_auth: [] ]
+
+      response "200", "current status" do
+        let(:order) { order_awaiting_approval }
+        let(:id) { order.id }
+
+        run_test! do |response|
+          expect(JSON.parse(response.body)).to eq(
+            "id" => order.id, "number" => order.number,
+            "status" => "awaiting_approval", "status_label" => "Aguardando aprovação"
+          )
         end
       end
 

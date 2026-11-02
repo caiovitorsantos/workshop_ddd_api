@@ -22,6 +22,13 @@ module Api
         )
       end
 
+      def status
+        render_found(
+          container.orders.find(params[:id]),
+          with: ServiceOrderPresenter.method(:status), missing: "service order"
+        )
+      end
+
       def create
         result = container.open_service_order.call(
           vehicle_id: params.require(:service_order).require(:vehicle_id)
