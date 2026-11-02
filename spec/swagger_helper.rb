@@ -24,7 +24,8 @@ RSpec.configure do |config|
 
           Authentication: every administrative route requires
           `Authorization: Bearer <token>`. Get a token from POST /api/v1/session.
-          The only public route is the customer's order tracking endpoint.
+          The only public route is the customer's order tracking endpoint. The
+          quote-decision webhook skips the JWT but must carry an HMAC signature.
         DESCRIPTION
       },
       paths: {},

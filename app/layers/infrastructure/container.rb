@@ -104,6 +104,12 @@ module Infrastructure
     def reject_quote         = moving_stock(Application::Workshop::RejectQuote)
     def cancel_service_order = moving_stock(Application::Workshop::CancelServiceOrder)
 
+    def decide_quote
+      Application::Workshop::DecideQuote.new(
+        orders: orders, approve_quote: approve_quote, reject_quote: reject_quote
+      )
+    end
+
     private
 
     # Life cycle commands that touch only the order.

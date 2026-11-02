@@ -12,7 +12,8 @@ info:
 
     Authentication: every administrative route requires
     `Authorization: Bearer <token>`. Get a token from POST /api/v1/session.
-    The only public route is the customer's order tracking endpoint.
+    The only public route is the customer's order tracking endpoint. The
+    quote-decision webhook skips the JWT but must carry an HMAC signature.
 paths:
   "/api/v1/customers":
     post:
@@ -333,12 +334,37 @@ paths:
       - Service orders
       security:
       - bearer_auth: []
+      description: |
+        Everything the counter knows, in one request. The customer is found by
+        tax id or registered; the vehicle is found by plate or registered under
+        that customer; services are added and parts reserved. Any refusal rolls
+        all of it back — no customer, vehicle, order or reservation is kept.
+        An existing customer or vehicle is used as is, never overwritten.
       parameters: []
       responses:
         '201':
-          description: order opened in 'received'
+          description: order opened in 'received', customer and vehicle registered
+            on the fly
+        '400':
+          description: customer or vehicle missing
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
         '404':
-          description: vehicle not registered
+          description: service or part not in the catalog
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '409':
+          description: plate registered to another customer
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '422':
+          description: not enough stock to reserve the parts
           content:
             application/json:
               schema:
@@ -352,11 +378,67 @@ paths:
                 service_order:
                   type: object
                   properties:
-                    vehicle_id:
-                      type: integer
-                      example: 1
+                    customer:
+                      type: object
+                      properties:
+                        tax_id:
+                          type: string
+                          example: 529.982.247-25
+                        name:
+                          type: string
+                          example: Maria Silva
+                        email:
+                          type: string
+                          example: maria@exemplo.com
+                        phone:
+                          type: string
+                          example: '11999990000'
+                      required:
+                      - tax_id
+                    vehicle:
+                      type: object
+                      properties:
+                        plate:
+                          type: string
+                          example: ABC1D23
+                        make:
+                          type: string
+                          example: Fiat
+                        model:
+                          type: string
+                          example: Argo
+                        year:
+                          type: integer
+                          example: 2021
+                      required:
+                      - plate
+                    services:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          service_id:
+                            type: integer
+                          quantity:
+                            type: integer
+                            default: 1
+                        required:
+                        - service_id
+                    parts:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          part_id:
+                            type: integer
+                          quantity:
+                            type: integer
+                        required:
+                        - part_id
+                        - quantity
                   required:
-                  - vehicle_id
+                  - customer
+                  - vehicle
               required:
               - service_order
     get:
@@ -378,7 +460,7 @@ paths:
           type: integer
       responses:
         '200':
-          description: order list
+          description: open orders by priority, oldest first; finished ones left out
   "/api/v1/service_orders/{id}":
     parameters:
     - name: id
@@ -395,6 +477,28 @@ paths:
       responses:
         '200':
           description: order found
+        '404':
+          description: order not found
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+  "/api/v1/service_orders/{id}/status":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: Fetches only the order's current status
+      tags:
+      - Service orders
+      security:
+      - bearer_auth: []
+      responses:
+        '200':
+          description: current status
         '404':
           description: order not found
           content:
@@ -972,6 +1076,74 @@ paths:
       responses:
         '200':
           description: vehicle list
+  "/api/v1/webhooks/quote_decisions":
+    post:
+      summary: Receives the customer's decision on a quote (external system)
+      tags:
+      - Webhooks
+      description: |
+        Called by the system that shows the quote to the customer. No JWT: the
+        caller proves itself with `X-Signature`, the hex HMAC-SHA256 of the raw
+        request body under the shared secret `QUOTE_WEBHOOK_SECRET`.
+
+        Idempotent: repeating a decision that was already applied answers 200
+        and changes nothing. A contradicting decision, or one for an order not
+        awaiting approval, is a 409. Rate limited to 30 requests per minute.
+      parameters:
+      - name: X-Signature
+        in: header
+        required: true
+        description: hex HMAC-SHA256 of the raw body
+        schema:
+          type: string
+      responses:
+        '200':
+          description: decision applied (or already applied)
+        '401':
+          description: signature missing or wrong
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '404':
+          description: no such order
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '409':
+          description: contradicts a decision already applied, or order not awaiting
+            approval
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+        '422':
+          description: unknown decision
+          content:
+            application/json:
+              schema:
+                "$ref": "#/components/schemas/Error"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order_number:
+                  type: string
+                  example: OS-000042
+                decision:
+                  type: string
+                  enum:
+                  - approved
+                  - rejected
+                reason:
+                  type: string
+                  example: Preço acima do esperado
+              required:
+              - order_number
+              - decision
 servers:
 - url: http://localhost:3000
   description: Local environment (docker compose)

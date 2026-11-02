@@ -346,3 +346,4 @@ Todos exigem `Authorization: Bearer <token>`, exceto o acompanhamento.
 | `POST` | `/service_orders/:id/complete` · `deliver` | → Finalizada → Entregue |
 | `GET` | `/indicators/average_execution_time` | Tempo médio (`?since=`) |
 | `GET` | **`/tracking/:number`** | **Acompanhamento público, sem token** |
+| `POST` | `/webhooks/quote_decisions` | Decisão do orçamento vinda de sistema externo: sem JWT, assinada com HMAC-SHA256 do corpo (`X-Signature`); idempotente |

@@ -52,7 +52,11 @@ Rails.application.routes.draw do
         end
       end
 
-      # Public order tracking — the ONLY route without JWT. See
+      # Quote decision from an external system: no JWT, but HMAC-signed — see
+      # Webhooks::QuoteDecisionsController.
+      post "webhooks/quote_decisions", to: "webhooks/quote_decisions#create"
+
+      # Public order tracking — the ONLY route anyone may call unsigned. See
       # TrackingController for what it deliberately withholds and why.
       # The constraint keeps the route from swallowing anything but an order
       # number, since the segment would otherwise eat dots and slashes.
