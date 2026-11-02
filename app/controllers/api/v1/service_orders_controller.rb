@@ -30,9 +30,16 @@ module Api
       end
 
       def create
-        result = container.open_service_order.call(
-          vehicle_id: params.require(:service_order).require(:vehicle_id)
+        input = params.require(:service_order).permit(
+          customer: %i[tax_id name email phone],
+          vehicle: %i[plate make model year],
+          services: %i[service_id quantity],
+          parts: %i[part_id quantity]
         )
+        input.require(:customer)
+        input.require(:vehicle)
+
+        result = container.open_service_order.call(**input.to_h.deep_symbolize_keys)
 
         respond_with(result, with: ServiceOrderPresenter, success: :created)
       end

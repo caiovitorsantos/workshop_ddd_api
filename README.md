@@ -333,8 +333,10 @@ Todos exigem `Authorization: Bearer <token>`, exceto o acompanhamento.
 | `POST` | `/services/:id/retire` | Tira de linha, preservando histórico |
 | `GET POST PATCH DELETE` | `/parts` · `/parts/:id` | Peças (`?below_minimum=1`); resposta traz `quantity_on_hand`, `quantity_reserved` e `available` |
 | `POST` | `/parts/:id/restock` | Entrada de estoque |
-| `GET POST` | `/service_orders` | Abre e lista OS (`?status=`) |
+| `POST` | `/service_orders` | Abre a OS: cria cliente (por CPF/CNPJ) e veículo (por placa) se preciso, adiciona serviços e **reserva peças**, tudo ou nada (409 se a placa é de outro cliente) |
+| `GET` | `/service_orders` | Fila de trabalho: Em execução > Aguardando aprovação > Em diagnóstico > Recebida, mais antigas primeiro; sem finalizadas, entregues e canceladas (`?status=` filtra qualquer uma) |
 | `GET` | `/service_orders/:id` | OS com itens e orçamento |
+| `GET` | `/service_orders/:id/status` | Só o status atual da OS |
 | `POST` | `/service_orders/:id/add_service` | Monta a OS |
 | `POST` | `/service_orders/:id/add_part` | Monta a OS **+ reserva estoque** (422 se faltar saldo disponível) |
 | `POST` | `/service_orders/:id/start_diagnosis` | → Em diagnóstico |

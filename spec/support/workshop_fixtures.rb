@@ -106,12 +106,22 @@ module WorkshopFixtures
     )
   end
 
+  # The counter's input for a car already on the books: opening reuses the
+  # customer (by tax id) and the vehicle (by plate) it finds.
+  def opening_of(vehicle, services: [], parts: [])
+    owner = customers.find(vehicle.customer_id)
+    {
+      customer: { tax_id: owner.tax_id.number, name: owner.name },
+      vehicle: { plate: vehicle.plate.code, make: vehicle.make, model: vehicle.model, year: vehicle.year },
+      services: services, parts: parts
+    }
+  end
+
+  def open_order_for(vehicle) = container.open_service_order.call(**opening_of(vehicle))
+
   # A freshly opened order, still a draft (status `received`).
   def draft_order(vehicle: nil)
-    vehicle ||= create_vehicle
-    must_succeed(
-      container.open_service_order.call(vehicle_id: vehicle.id)
-    )
+    must_succeed(open_order_for(vehicle || create_vehicle))
   end
 
   # A draft with one service on it, moved to `in_diagnosis` — the state
@@ -147,7 +157,7 @@ module WorkshopFixtures
     vehicle   = create_vehicle
 
     order = must_succeed(
-      container.open_service_order.call(vehicle_id: vehicle.id)
+      open_order_for(vehicle)
     )
 
     must_succeed(

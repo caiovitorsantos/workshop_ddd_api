@@ -39,7 +39,7 @@ RSpec.describe Application::Workshop::RejectQuote do
     part    = create_part(on_hand: 10)
     vehicle = create_vehicle
 
-    order = container.open_service_order.call(vehicle_id: vehicle.id).value
+    order = open_order_for(vehicle).value
     2.times do
       container.add_part_to_order.call(
         id: order.id, part_id: part.id, quantity: 2

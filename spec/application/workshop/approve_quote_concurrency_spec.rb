@@ -40,7 +40,7 @@ RSpec.describe "stock movements under concurrency" do
 
   def draft_order
     vehicle = create_vehicle
-    container.open_service_order.call(vehicle_id: vehicle.id).value
+    open_order_for(vehicle).value
   end
 
   it "lets exactly one of two simultaneous additions reserve the last unit" do
@@ -90,9 +90,7 @@ RSpec.describe "stock movements under concurrency" do
 
     numbers = vehicles_to_use.map do |vehicle|
       in_own_connection do
-        Infrastructure::Container.new.open_service_order.call(
-          vehicle_id: vehicle.id
-        ).value.number
+        Infrastructure::Container.new.open_service_order.call(**opening_of(vehicle)).value.number
       end
     end.map(&:value)
 

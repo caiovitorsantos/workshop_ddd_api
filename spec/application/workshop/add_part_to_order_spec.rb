@@ -12,7 +12,7 @@ RSpec.describe Application::Workshop::AddPartToOrder do
   def draft_order
     vehicle = create_vehicle
     must_succeed(
-      container.open_service_order.call(vehicle_id: vehicle.id)
+      open_order_for(vehicle)
     )
   end
 

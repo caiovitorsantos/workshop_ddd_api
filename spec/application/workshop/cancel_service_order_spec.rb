@@ -15,7 +15,7 @@ RSpec.describe Application::Workshop::CancelServiceOrder do
 
   def draft_order
     vehicle = create_vehicle
-    container.open_service_order.call(vehicle_id: vehicle.id).value
+    open_order_for(vehicle).value
   end
 
   it "cancels an order that never got as far as a quote" do

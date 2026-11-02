@@ -82,7 +82,8 @@ module Infrastructure
 
     def open_service_order
       Application::Workshop::OpenServiceOrder.new(
-        orders: orders, vehicles: vehicles, customers: customers, events: events
+        orders: orders, customers: customers, vehicles: vehicles, services: services,
+        parts: parts, transaction: transaction, events: events
       )
     end
 

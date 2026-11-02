@@ -97,7 +97,7 @@ RSpec.describe "api/v1/services", type: :request do
 
     it "refuses to add a retired service to an order" do
       retired = create_service(active: false)
-      order   = container.open_service_order.call(vehicle_id: create_vehicle.id).value
+      order   = open_order_for(create_vehicle).value
 
       post "/api/v1/service_orders/#{order.id}/add_service",
            params: { item: { service_id: retired.id } }, headers: auth_headers
