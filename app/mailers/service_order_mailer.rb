@@ -16,13 +16,30 @@ class ServiceOrderMailer < ActionMailer::Base
     "service_order_cancelled" => "A ordem de serviço foi cancelada."
   }.freeze
 
+  # The status each event leads to. The job runs a moment after the event, and
+  # by then the order may have moved on (a quote approved by webhook before
+  # its e-mail went out): the e-mail names the status of *its* event, never
+  # the order's current one.
+  Status = Domain::Workshop::OrderStatus
+  STATUS_AFTER = {
+    "service_order_opened" => Status::RECEIVED,
+    "diagnosis_started" => Status::IN_DIAGNOSIS,
+    "quote_sent_to_customer" => Status::AWAITING_APPROVAL,
+    "work_started" => Status::IN_PROGRESS,
+    "work_completed" => Status::COMPLETED,
+    "vehicle_delivered" => Status::DELIVERED,
+    "quote_rejected" => Status::CANCELLED,
+    "service_order_cancelled" => Status::CANCELLED
+  }.freeze
+
   def status_changed(event:, order:, customer:)
     @message  = MESSAGES.fetch(event)
+    @status   = Status::LABELS.fetch(STATUS_AFTER.fetch(event))
     @order    = order
     @customer = customer
     @quote    = order.quote if event == "quote_sent_to_customer"
     @tracking_url = "#{ENV.fetch("PUBLIC_URL", "http://localhost:3000")}/api/v1/tracking/#{order.number}"
 
-    mail(to: customer.email, subject: "Ordem de serviço #{order.number}: #{order.status.label}")
+    mail(to: customer.email, subject: "Ordem de serviço #{order.number}: #{@status}")
   end
 end

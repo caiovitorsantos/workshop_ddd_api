@@ -37,3 +37,7 @@
 *.tfstate
 *.tfstate.*
 *.tfvars
+
+# Rendered by the CD (and by hand on a manual deploy): never committed.
+/k8s/aws/
+/rendered.yaml

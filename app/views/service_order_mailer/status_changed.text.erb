@@ -3,7 +3,7 @@ Olá, <%= @customer.name %>.
 <%= @message %>
 
 Ordem de serviço: <%= @order.number %>
-Status atual: <%= @order.status.label %>
+Status: <%= @status %>
 <% if @quote -%>
 Valor do orçamento: <%= @quote.total %>
 <% end -%>

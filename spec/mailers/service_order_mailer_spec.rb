@@ -14,14 +14,31 @@ RSpec.describe ServiceOrderMailer do
     expect(described_class::MESSAGES.keys).to match_array(Infrastructure::Events::ActiveJobPublisher::NOTIFIED)
   end
 
-  it "tells the customer what happened, the current status and where to follow it" do
+  it "tells the customer what happened, the status it led to and where to follow it" do
     mail = mail_for("diagnosis_started")
 
     expect(mail.to).to eq([ "maria@exemplo.com" ])
-    expect(mail.subject).to eq("Ordem de serviço #{order.number}: Aguardando aprovação")
+    expect(mail.subject).to eq("Ordem de serviço #{order.number}: Em diagnóstico")
     expect(mail.body.to_s).to include(
-      "Olá, Maria Silva.", "Começamos o diagnóstico", "/api/v1/tracking/#{order.number}"
+      "Olá, Maria Silva.", "Começamos o diagnóstico", "Status: Em diagnóstico",
+      "/api/v1/tracking/#{order.number}"
     )
+  end
+
+  # Found on the first AWS deploy: the worker ran the quote e-mail after the
+  # webhook had already approved it, and the mail asking for approval said
+  # "Em execução". The e-mail describes its event, not whatever came after.
+  it "names the status its event produced, even when the order has moved on" do
+    approved = must_succeed(container.approve_quote.call(id: order.id))
+
+    mail = described_class.status_changed(event: "quote_sent_to_customer", order: approved, customer: customer)
+
+    expect(mail.subject).to end_with("Aguardando aprovação")
+    expect(mail.body.to_s).to include("Status: Aguardando aprovação").and include("R$ 210.00")
+  end
+
+  it "knows the resulting status of every notified event" do
+    expect(described_class::STATUS_AFTER.keys).to match_array(described_class::MESSAGES.keys)
   end
 
   it "shows the quote total only in the e-mail that asks for a decision" do
