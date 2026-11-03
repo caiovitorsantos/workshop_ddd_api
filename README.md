@@ -489,7 +489,9 @@ flowchart LR
 | `security.yml` | push na `main` e pull request | relatório do Brakeman + bundler-audit, sem bloquear |
 
 Secrets do environment `production` no GitHub: `AWS_ACCESS_KEY_ID`,
-`AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN` (renovar a cada sessão do lab),
+`AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN` (renovar a cada sessão do lab com
+`infra/refresh-aws-secrets.sh`, depois de colar as credenciais novas em
+`~/.aws/credentials`),
 `DB_PASSWORD`, `SECRET_KEY_BASE`, `JWT_SECRET` e `QUOTE_WEBHOOK_SECRET`.
 
 ---
