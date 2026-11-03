@@ -119,5 +119,6 @@ RSpec.describe Application::Workshop::OpenServiceOrder do
     use_case.call(customer: new_customer, vehicle: new_vehicle, parts: [ { part_id: part.id, quantity: 1 } ])
 
     expect(events.names).to eq(%w[service_order_opened quote_generated stock_reserved])
+    expect(events.published.first(2).map(&:aggregate_id).uniq).to eq([ orders.find_by_number(events.published.first.payload[:number]).id ])
   end
 end

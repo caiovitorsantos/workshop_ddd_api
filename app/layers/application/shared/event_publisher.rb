@@ -8,8 +8,8 @@ module Application
     # the customer, a message on a queue — is an adapter's business, and the
     # use case does not know which one it got.
     #
-    # Adapters: Infrastructure::Events::LoggingPublisher today; the
-    # customer-notification adapter arrives with the e-mail work.
+    # Adapters: Infrastructure::Events::LoggingPublisher (log lines) and
+    # ActiveJobPublisher (log lines + e-mail to the customer), the one wired.
     class EventPublisher
       # `events` is an Array of Domain::Shared::DomainEvent, possibly empty.
       def publish(events)

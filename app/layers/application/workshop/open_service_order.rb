@@ -60,7 +60,10 @@ module Application
           [ order, stock.values, saved ]
         end
 
-        publish_events_of(order, *stock)
+        # The order's events were recorded before it had an id; stamp the one
+        # the save gave it, so listeners can find the order they speak of.
+        opened = order.drain_events.each { |event| event.aggregate_id ||= saved.id }
+        events.publish(opened + stock.flat_map(&:drain_events))
         saved
       end
 

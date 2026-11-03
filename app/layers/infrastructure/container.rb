@@ -31,7 +31,7 @@ module Infrastructure
     # --- Ports: unit of work and domain events ---------------------------------
 
     def transaction = @transaction ||= Persistence::ActiveRecordTransactionManager.new
-    def events      = @events      ||= Events::LoggingPublisher.new(logger: Rails.logger)
+    def events      = @events      ||= Events::ActiveJobPublisher.new(logger: Rails.logger)
 
     # --- Use cases: Registry ---------------------------------------------------
 

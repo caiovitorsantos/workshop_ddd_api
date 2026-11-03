@@ -33,3 +33,5 @@ group :development, :test do
 
   gem "rubocop-rails-omakase", require: false
 end
+
+gem "solid_queue", "~> 1.7"
