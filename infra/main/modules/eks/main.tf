@@ -17,12 +17,31 @@ resource "aws_eks_cluster" "this" {
   }
 }
 
+# Pods must not read the node's instance credentials (LabRole is broad: an RCE
+# in the API would become the whole lab account). IMDSv2 only, with a hop limit
+# of 1 — a pod is one network hop past the node, so its requests never reach
+# the metadata endpoint. Host-network pods (aws-node, kube-proxy) still do.
+resource "aws_launch_template" "nodes" {
+  name_prefix = "${var.name}-nodes-"
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+  }
+}
+
 resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${var.name}-nodes"
   node_role_arn   = var.role_arn
   subnet_ids      = var.subnet_ids
   instance_types  = [var.node_instance_type]
+
+  launch_template {
+    id      = aws_launch_template.nodes.id
+    version = aws_launch_template.nodes.latest_version
+  }
 
   # Room for the HPA's 6 API replicas plus worker, Mailpit and system pods.
   scaling_config {
