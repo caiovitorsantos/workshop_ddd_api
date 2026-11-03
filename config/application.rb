@@ -2,13 +2,15 @@ require_relative "boot"
 
 require "rails"
 # Pick the frameworks you want:
-# Only the frameworks this API actually uses. Action Mailer, Active Job and
-# Active Storage are left out: the MVP sends no mail, runs no background jobs
-# and stores no files, and every framework loaded is code that has to be kept
-# patched and audited.
+# Only the frameworks this API actually uses. Active Job and Action Mailer
+# arrived in Phase 2 to e-mail the customer on each status change (Solid Queue
+# in the primary database, no Redis). Active Storage stays out: nothing stores
+# files, and every framework loaded is code that has to be kept patched.
 require "active_model/railtie"
+require "active_job/railtie"
 require "active_record/railtie"
 require "action_controller/railtie"
+require "action_mailer/railtie"
 require "action_view/railtie" # required by rswag-ui to render the docs page
 
 # Require the gems listed in Gemfile, including any gems
@@ -50,5 +52,17 @@ module OficinaApi
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # Background jobs: Solid Queue, tables in the primary database (no Redis,
+    # one RDS database). Workers run as `bin/jobs`.
+    config.active_job.queue_adapter = :solid_queue
+
+    # Customer e-mail goes over plain SMTP: Mailpit locally and in the cluster.
+    config.action_mailer.delivery_method = :smtp
+    config.action_mailer.smtp_settings = {
+      address: ENV.fetch("SMTP_HOST", "localhost"),
+      port: ENV.fetch("SMTP_PORT", 1025).to_i
+    }
+    config.action_mailer.default_options = { from: ENV.fetch("MAIL_FROM", "oficina@oficina.test") }
   end
 end

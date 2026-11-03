@@ -46,31 +46,15 @@ module Api
       rate_limit to: 30, within: 1.minute, store: RATE_LIMIT_STORE, only: :show
 
       def show
-        order = repository.find_by_number(params[:number])
-        return render_error("service order not found", :not_found) unless order
-
-        render json: serialize(order)
+        render_found(
+          repository.find_by_number(params[:number]),
+          with: TrackingPresenter, missing: "service order"
+        )
       end
 
       private
 
-      def repository
-        @repository ||= Infrastructure::Persistence::Repositories::ServiceOrdersInActiveRecord.new
-      end
-
-      def serialize(order)
-        {
-          number: order.number,
-          status: order.status.to_s,
-          status_label: order.status.label,
-          # Portuguese: this is read by the customer, not by another system.
-          waiting_on_you: order.status.awaiting_approval?,
-          opened_at: order.opened_at,
-          approved_at: order.approved_at,
-          completed_at: order.completed_at,
-          delivered_at: order.delivered_at
-        }
-      end
+      def repository = container.orders
     end
   end
 end

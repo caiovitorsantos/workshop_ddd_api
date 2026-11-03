@@ -1,0 +1,13 @@
+Olá, <%= @customer.name %>.
+
+<%= @message %>
+
+Ordem de serviço: <%= @order.number %>
+Status: <%= @status %>
+<% if @quote -%>
+Valor do orçamento: <%= @quote.total %>
+<% end -%>
+
+Acompanhe em <%= @tracking_url %>
+
+Oficina

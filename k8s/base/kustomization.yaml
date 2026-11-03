@@ -1,0 +1,22 @@
+# Base for every environment. On AWS the CD sets the image (ECR + commit SHA):
+#
+#   kustomize edit set image oficina-api=<account>.dkr.ecr.us-east-1.amazonaws.com/oficina-api:<sha>
+#
+# k8s/local is the overlay used to validate all of this in kind; an AWS overlay
+# (or the CD) supplies the RDS host and the real Secret.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: oficina
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - mailpit.yaml
+  - migrate-job.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - api-hpa.yaml
+  - worker-deployment.yaml
+images:
+  - name: oficina-api
+    newName: oficina-api
+    newTag: latest

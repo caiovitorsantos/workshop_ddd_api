@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-api
+  labels: { app: oficina-api }
+spec:
+  # No `replicas`: the HPA owns the count (min 2), and a fixed value here would
+  # reset it on every apply.
+  selector:
+    matchLabels: { app: oficina-api }
+  strategy:
+    type: RollingUpdate
+    # Never below the current capacity during a rollout: a new pod must be
+    # ready before an old one goes.
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app: oficina-api }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: api
+          image: oficina-api
+          ports:
+            - { name: http, containerPort: 8080 }
+          envFrom:
+            - configMapRef: { name: oficina-api-config }
+            - secretRef: { name: oficina-api-secrets }
+          # The HPA computes utilisation against these requests; without them
+          # it cannot scale at all.
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { cpu: "1", memory: 1Gi }
+          # Rails boots in seconds but not instantly: the startup probe gives
+          # it up to 60s before liveness is allowed to restart anything.
+          startupProbe:
+            httpGet: { path: /up, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: { path: /up, port: http }
+            periodSeconds: 5
+          # /up does not touch the database on purpose: an RDS hiccup must not
+          # make Kubernetes restart every API pod at once.
+          livenessProbe:
+            httpGet: { path: /up, port: http }
+            periodSeconds: 10
+            failureThreshold: 3

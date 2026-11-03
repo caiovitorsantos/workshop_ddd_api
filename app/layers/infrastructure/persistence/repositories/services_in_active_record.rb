@@ -18,6 +18,12 @@ module Infrastructure
           record.save!
 
           to_domain(record)
+        rescue ActiveRecord::RecordNotUnique
+          # The unique index is the real guard against two requests racing to
+          # add the same service; a SELECT-then-INSERT check would leave a
+          # window between the two. Translate the database's answer into the
+          # domain's.
+          raise Domain::Shared::Errors::AlreadyExists, "service '#{service.name}' is already in the catalog"
         end
 
         def find(id)

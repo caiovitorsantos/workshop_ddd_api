@@ -1,0 +1,21 @@
+# Non-secret settings shared by the API, the worker and the migration Job.
+# POSTGRES_HOST and PUBLIC_URL are environment-specific: the CD replaces them
+# with the RDS endpoint and the load balancer's address (Terraform outputs).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oficina-api-config
+data:
+  RAILS_ENV: production
+  RAILS_MAX_THREADS: "5"
+  # Thruster (in front of Puma) listens on 8080: a non-root pod cannot count
+  # on binding port 80.
+  HTTP_PORT: "8080"
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: oficina_api_production
+  POSTGRES_USER: oficina
+  SMTP_HOST: mailpit
+  SMTP_PORT: "1025"
+  MAIL_FROM: oficina@oficina.test
+  PUBLIC_URL: http://localhost:8080

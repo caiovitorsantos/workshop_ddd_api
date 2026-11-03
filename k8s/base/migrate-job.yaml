@@ -1,0 +1,28 @@
+# Runs the migrations once per deploy, before the new pods roll out — the
+# entrypoint never migrates in production, so replicas cannot race on it.
+#
+# `db:migrate`, never `db:prepare`: on an empty database `prepare` also loads
+# the seeds, which create a manager with the default password.
+#
+# A Job's pod template is immutable: the CD deletes the previous Job before
+# applying, then waits with `kubectl wait --for=condition=complete`.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: oficina-migrate
+spec:
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: migrate
+          image: oficina-api
+          command: [ "bin/rails", "db:migrate" ]
+          envFrom:
+            - configMapRef: { name: oficina-api-config }
+            - secretRef: { name: oficina-api-secrets }

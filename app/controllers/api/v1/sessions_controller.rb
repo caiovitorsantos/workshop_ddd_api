@@ -5,7 +5,7 @@ module Api
       skip_authentication only: :create
 
       def create
-        repository = Infrastructure::Persistence::Repositories::UsersInActiveRecord.new
+        repository = container.users
 
         # One single message for any bad credential: we never reveal whether the
         # email exists, which is what stops user enumeration.

@@ -38,6 +38,11 @@ module Domain
         CANCELLED         => []
       }.freeze
 
+      # The workshop's work queue: what is on the lift first, then what waits on
+      # the customer, then the rest by how far it got. Completed, delivered and
+      # cancelled orders are not in the queue at all.
+      LISTING_PRIORITY = [ IN_PROGRESS, AWAITING_APPROVAL, IN_DIAGNOSIS, RECEIVED ].freeze
+
       # Labels in Portuguese: this is what the workshop staff reads on screen,
       # and the ubiquitous language of the business is Portuguese even though
       # the code is written in English.

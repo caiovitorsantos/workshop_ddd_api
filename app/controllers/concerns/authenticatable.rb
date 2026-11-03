@@ -37,7 +37,6 @@ module Authenticatable
     header[/\ABearer (.+)\z/, 1].to_s
   end
 
-  def user_repository
-    Infrastructure::Persistence::Repositories::UsersInActiveRecord.new
-  end
+  # `container` comes from Api::V1::BaseController, the only includer.
+  def user_repository = container.users
 end

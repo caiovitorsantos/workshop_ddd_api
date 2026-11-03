@@ -19,6 +19,9 @@ module Infrastructure
           record.save!
 
           to_domain(record)
+        rescue ActiveRecord::RecordNotUnique
+          # Same reasoning as the services adapter: the unique index decides.
+          raise Domain::Shared::Errors::AlreadyExists, "part '#{part.sku}' already exists"
         end
 
         def find(id)

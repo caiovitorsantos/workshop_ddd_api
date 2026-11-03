@@ -23,34 +23,39 @@ module Application
     class ApproveQuote < Application::Shared::UseCase
       include QuotedPartQuantities
 
-      def initialize(orders:, parts:, id:)
+      def initialize(orders:, parts:, transaction:, events:)
         @orders = orders
         @parts = parts
-        @id = id
+        @transaction = transaction
+        @events = events
       end
 
       private
 
-      attr_reader :orders, :parts, :id
+      attr_reader :orders, :parts, :transaction, :events
 
-      def perform
+      def perform(id:)
         # One transaction spans both contexts. Rolling back undoes the stock
         # movements together with the status change — there is no window where
         # one landed and the other did not.
-        ActiveRecord::Base.transaction do
+        order, moved_parts, saved = transaction.within do
           order = orders.find(id)
           raise Domain::Shared::Errors::NotFound, "service order #{id} not found" if order.nil?
 
           # Status transition first: an order that cannot move to `in_progress`
           # (already approved, wrong state) fails here, before any stock moves.
           order.approve_quote!
-          consume_reserved_parts(order)
-          orders.save(order)
+          moved_parts = consume_reserved_parts(order)
+          [ order, moved_parts, orders.save(order) ]
         end
+
+        publish_events_of(order, *moved_parts)
+        saved
       end
 
+      # Returns the parts it moved, so their events can be published.
       def consume_reserved_parts(order)
-        quantities_by_part(order).each do |part_id, quantity|
+        quantities_by_part(order).map do |part_id, quantity|
           # Locked, not merely read: two approvals touching the same part would
           # otherwise read the same balance and one deduction would be lost.
           part = parts.find_for_update(part_id)
@@ -58,6 +63,7 @@ module Application
 
           part.consume_reserved!(quantity, service_order_id: order.id)
           parts.save(part)
+          part
         end
       end
     end

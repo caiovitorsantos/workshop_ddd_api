@@ -1,77 +1,49 @@
 module Api
   module V1
     # Customer CRUD. Reference vertical slice for the interface layer: take
-    # params, call the use case, serialize the result. Nothing beyond that.
+    # params, call the use case, present the result. Nothing beyond that.
     class CustomersController < BaseController
       def index
         customers, total = repository.list(page: page, per_page: per_page, query: params[:q])
 
-        render json: {
-          data: customers.map { |c| serialize(c) },
-          pagination: { page: page, per_page: per_page, total: total }
-        }
+        render_page(customers, total, with: CustomerPresenter)
       end
 
       def show
-        customer = repository.find(params[:id])
-        return render_error("customer not found", :not_found) unless customer
-
-        render json: serialize(customer)
+        render_found(repository.find(params[:id]), with: CustomerPresenter, missing: "customer")
       end
 
       def create
-        result = Application::Registry::RegisterCustomer.call(
-          repository: repository,
+        result = container.register_customer.call(
           tax_id: customer_params[:tax_id],
           name: customer_params[:name],
           email: customer_params[:email],
           phone: customer_params[:phone]
         )
 
-        respond_with(result, success: :created) { |customer| serialize(customer) }
+        respond_with(result, with: CustomerPresenter, success: :created)
       end
 
+      # `tax_id` is not among the changes passed on: it is the customer's
+      # natural identity, and the spec proves a PATCH ignores it.
       def update
-        customer = repository.find(params[:id])
-        return render_error("customer not found", :not_found) unless customer
-
-        updated = customer.update_contact(
-          name: customer_params.fetch(:name, customer.name),
-          email: customer_params.fetch(:email, customer.email),
-          phone: customer_params.fetch(:phone, customer.phone)
+        result = container.update_customer_contact.call(
+          id: params[:id], **changes_from(customer_params, :name, :email, :phone)
         )
 
-        render json: serialize(repository.save(updated))
-      rescue Domain::Shared::Errors::Base => e
-        render_error(e.message, :unprocessable_entity)
+        respond_with(result, with: CustomerPresenter)
       end
 
       def destroy
-        repository.delete(params[:id])
-        head :no_content
-      rescue ActiveRecord::RecordNotDestroyed, ActiveRecord::InvalidForeignKey
-        render_error("customer still has vehicles attached", :conflict)
+        respond_with(container.remove_customer.call(id: params[:id]), success: :no_content)
       end
 
       private
 
-      def repository
-        @repository ||= Infrastructure::Persistence::Repositories::CustomersInActiveRecord.new
-      end
+      def repository = container.customers
 
       def customer_params
         params.require(:customer).permit(:tax_id, :name, :email, :phone)
-      end
-
-      def serialize(customer)
-        {
-          id: customer.id,
-          tax_id: customer.tax_id.formatted,
-          tax_id_kind: customer.tax_id.kind,
-          name: customer.name,
-          email: customer.email,
-          phone: customer.phone
-        }
       end
     end
   end

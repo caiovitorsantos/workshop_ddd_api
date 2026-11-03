@@ -49,8 +49,14 @@ module Infrastructure
           [ records.map { |r| to_domain(r) }, total ]
         end
 
+        # Deleting what does not exist is a no-op: DELETE stays idempotent.
+        # A row still referenced elsewhere is refused by the database (foreign
+        # key) or by the record's `restrict_with_error`; either way the caller
+        # hears it in the domain's words, never as an ActiveRecord exception.
         def delete(id)
           Record.find_by(id: id)&.destroy!
+        rescue ActiveRecord::RecordNotDestroyed, ActiveRecord::InvalidForeignKey
+          raise Domain::Shared::Errors::InUse, "customer still has vehicles attached"
         end
 
         private

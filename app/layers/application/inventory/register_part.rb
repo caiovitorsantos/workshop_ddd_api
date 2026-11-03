@@ -2,21 +2,16 @@ module Application
   module Inventory
     # Use case: add a part or consumable to the inventory.
     class RegisterPart < Application::Shared::UseCase
-      def initialize(parts:, sku:, description:, unit_price:,
-                     quantity_on_hand: 0, minimum_stock: 0)
+      def initialize(parts:)
         @parts = parts
-        @sku = sku
-        @description = description
-        @unit_price = unit_price
-        @quantity_on_hand = quantity_on_hand
-        @minimum_stock = minimum_stock
       end
 
       private
 
-      attr_reader :parts, :sku, :description, :unit_price, :quantity_on_hand, :minimum_stock
+      attr_reader :parts
 
-      def perform
+      # A duplicate SKU comes back from the repository as AlreadyExists.
+      def perform(sku:, description:, unit_price:, quantity_on_hand: 0, minimum_stock: 0)
         parts.save(
           Domain::Inventory::Part.new(
             sku: sku,
@@ -26,8 +21,6 @@ module Application
             minimum_stock: minimum_stock
           )
         )
-      rescue ActiveRecord::RecordNotUnique
-        raise Domain::Shared::Errors::AlreadyExists, "part '#{sku.to_s.upcase}' already exists"
       end
     end
   end

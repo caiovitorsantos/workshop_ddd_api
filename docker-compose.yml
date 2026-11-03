@@ -1,12 +1,38 @@
-# Full development environment: API + PostgreSQL.
+# Full development environment: API + job worker + PostgreSQL + Mailpit.
 #
 #   docker compose up --build          # brings everything up (API waits for a healthy db)
 #   docker compose exec api bin/rails db:seed
 #   docker compose exec api bundle exec rspec
 #
-# API at http://localhost:3000 and Swagger UI at http://localhost:3000/api-docs
+# API at http://localhost:3000, Swagger UI at http://localhost:3000/api-docs,
+# and the e-mails sent to customers at http://localhost:8025 (Mailpit).
 
 name: oficina-api
+
+# What the API and the worker share: same image, same code, same settings.
+x-app: &app
+  build:
+    context: .
+    target: development
+  environment:
+    RAILS_ENV: development
+    POSTGRES_HOST: db
+    POSTGRES_PORT: 5432
+    POSTGRES_USER: ${POSTGRES_USER:-postgres}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    POSTGRES_DB: ${POSTGRES_DB:-oficina_api_development}
+    JWT_SECRET: ${JWT_SECRET:-development-only-secret}
+    QUOTE_WEBHOOK_SECRET: ${QUOTE_WEBHOOK_SECRET:-development-only-webhook-secret}
+    SMTP_HOST: mailpit
+    SMTP_PORT: 1025
+    MAIL_FROM: ${MAIL_FROM:-oficina@oficina.test}
+    PUBLIC_URL: http://localhost:${API_PORT:-3000}
+    RAILS_MAX_THREADS: 5
+  volumes:
+    # Source mounted from the host: editing a file reloads without a rebuild.
+    - .:/rails
+    # Gems get their own volume so the mount above does not shadow them.
+    - installed_gems:/usr/local/bundle
 
 services:
   db:
@@ -28,30 +54,39 @@ services:
       retries: 10
 
   api:
-    build:
-      context: .
-      target: development
-    environment:
-      RAILS_ENV: development
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-oficina_api_development}
-      JWT_SECRET: ${JWT_SECRET:-development-only-secret}
-      RAILS_MAX_THREADS: 5
+    <<: *app
     ports:
       # Host port is configurable so this stack can coexist with another Rails
       # project already holding 3000: `API_PORT=3010 docker compose up`.
       - "${API_PORT:-3000}:3000"
-    volumes:
-      # Source mounted from the host: editing a file reloads without a rebuild.
-      - .:/rails
-      # Gems get their own volume so the mount above does not shadow them.
-      - installed_gems:/usr/local/bundle
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      # Healthy only once the entrypoint has migrated and the server answers.
+      test: [ "CMD-SHELL", "curl -fsS http://localhost:3000/up" ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # Solid Queue worker: sends the customer e-mails. Same image as the API; it
+  # waits for the API to be healthy because the API is what runs the migrations
+  # that create the queue tables.
+  worker:
+    <<: *app
+    command: [ "bin/jobs" ]
+    depends_on:
+      api:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  # Catches every e-mail the workshop sends; nothing leaves the machine.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"
 
 volumes:
   postgres_data:

@@ -5,15 +5,17 @@ require "rails_helper"
 # rejection, it can happen before a quote ever existed. Runs against the real
 # repositories: status change and stock release are one transaction.
 RSpec.describe Application::Workshop::CancelServiceOrder do
+  subject(:use_case) do
+    described_class.new(orders: orders, parts: parts, transaction: transaction, events: events)
+  end
+
   def cancel(order, reason: nil)
-    described_class.call(orders: orders, parts: parts, id: order.id, reason: reason)
+    use_case.call(id: order.id, reason: reason)
   end
 
   def draft_order
     vehicle = create_vehicle
-    Application::Workshop::OpenServiceOrder.call(
-      orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-    ).value
+    open_order_for(vehicle).value
   end
 
   it "cancels an order that never got as far as a quote" do
@@ -28,8 +30,8 @@ RSpec.describe Application::Workshop::CancelServiceOrder do
   it "releases parts reserved before the order was cancelled" do
     part  = create_part(on_hand: 10)
     order = draft_order
-    Application::Workshop::AddPartToOrder.call(
-      orders: orders, parts: parts, id: order.id, part_id: part.id, quantity: 4
+    container.add_part_to_order.call(
+      id: order.id, part_id: part.id, quantity: 4
     )
 
     expect(parts.find(part.id).quantity_reserved).to eq(4)
@@ -48,7 +50,7 @@ RSpec.describe Application::Workshop::CancelServiceOrder do
   end
 
   it "reports a missing order" do
-    result = described_class.call(orders: orders, parts: parts, id: 999_999)
+    result = use_case.call(id: 999_999)
 
     expect(result).to be_failure
     expect(result.code).to eq(:not_found)
@@ -56,7 +58,7 @@ RSpec.describe Application::Workshop::CancelServiceOrder do
 
   it "refuses to cancel an order already in progress" do
     order = order_awaiting_approval
-    Application::Workshop::ApproveQuote.call(orders: orders, parts: parts, id: order.id)
+    container.approve_quote.call(id: order.id)
 
     result = cancel(orders.find(order.id))
 

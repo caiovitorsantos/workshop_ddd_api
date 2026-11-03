@@ -13,42 +13,47 @@ module Application
     class ReleasingOrderCommand < Application::Shared::UseCase
       include QuotedPartQuantities
 
-      def initialize(orders:, parts:, id:, reason: nil)
+      def initialize(orders:, parts:, transaction:, events:)
         @orders = orders
         @parts = parts
-        @id = id
-        @reason = reason
+        @transaction = transaction
+        @events = events
       end
 
       private
 
-      attr_reader :orders, :parts, :id, :reason
+      attr_reader :orders, :parts, :transaction, :events
 
-      def perform
-        ActiveRecord::Base.transaction do
+      def perform(id:, reason: nil)
+        order, released_parts, saved = transaction.within do
           order = orders.find(id)
           raise Domain::Shared::Errors::NotFound, "service order #{id} not found" if order.nil?
 
           # Status transition first: an order that cannot be cancelled (already
           # in progress, already closed) fails here, before any stock moves.
-          apply(order)
-          release_reserved_parts(order)
-          orders.save(order)
+          apply(order, reason)
+          released_parts = release_reserved_parts(order)
+          [ order, released_parts, orders.save(order) ]
         end
+
+        publish_events_of(order, *released_parts)
+        saved
       end
 
+      # Returns the parts it released, so their events can be published.
       def release_reserved_parts(order)
-        quantities_by_part(order).each do |part_id, quantity|
+        quantities_by_part(order).map do |part_id, quantity|
           part = parts.find_for_update(part_id)
           raise Domain::Shared::Errors::NotFound, "part #{part_id} not found" if part.nil?
 
           part.release!(quantity, service_order_id: order.id)
           parts.save(part)
+          part
         end
       end
 
       # Subclasses implement this and nothing else.
-      def apply(order)
+      def apply(order, reason)
         raise NotImplementedError, "#{self.class} does not implement #apply"
       end
     end

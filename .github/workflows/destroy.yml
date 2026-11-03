@@ -1,0 +1,59 @@
+name: Destroy
+
+# Tears the whole AWS environment down to stop spending lab credit (EKS, nodes
+# and RDS are billed by the hour). Manual only, and it asks for the word
+# "destroy" so a stray click does nothing. The state bucket (infra/bootstrap)
+# stays, so the next CD run rebuilds everything from scratch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "destroy" to tear down VPC, EKS, RDS and ECR'
+        required: true
+
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  destroy:
+    if: inputs.confirm == 'destroy'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The load balancer belongs to Kubernetes, not to Terraform. Left behind,
+      # its security groups and network interfaces keep the VPC from being
+      # deleted, so the Service goes first and AWS gets time to release them.
+      - name: Remove the load balancer
+        run: |
+          if aws eks describe-cluster --name oficina-api >/dev/null 2>&1; then
+            aws eks update-kubeconfig --name oficina-api --region "$AWS_REGION"
+            kubectl -n oficina delete service oficina-api --ignore-not-found --wait --timeout=300s
+            sleep 60
+          fi
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false
+
+      - name: terraform destroy
+        working-directory: infra/main
+        env:
+          TF_VAR_db_password: unused-on-destroy
+        run: |
+          account=$(aws sts get-caller-identity --query Account --output text)
+          terraform init -input=false -backend-config="bucket=oficina-api-tfstate-${account}"
+          terraform destroy -input=false -auto-approve

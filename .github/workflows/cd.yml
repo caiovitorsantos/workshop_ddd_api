@@ -1,0 +1,219 @@
+name: CD
+
+# Push to main (or a manual run) → tests → infrastructure → image → database
+# schema → rollout on EKS. Every stage needs the previous one.
+#
+# AWS Academy credentials are temporary: before each lab session, refresh
+# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN in the
+# `production` environment (Learner Lab → AWS Details), then re-run with
+# "Run workflow" if a push already failed on expired credentials.
+#
+# Environment `production` secrets:
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
+#   DB_PASSWORD           RDS master password (Terraform and the app's Secret)
+#   SECRET_KEY_BASE       bin/rails secret
+#   JWT_SECRET            bin/rails secret
+#   QUOTE_WEBHOOK_SECRET  shared with the system that posts quote decisions
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Two deploys must never interleave their terraform apply or rollout.
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+  NAMESPACE: oficina
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  # "Deploy of the database" (infrastructure part): VPC, EKS, RDS and ECR.
+  infrastructure:
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      cluster_name: ${{ steps.out.outputs.cluster_name }}
+      ecr_repository_url: ${{ steps.out.outputs.ecr_repository_url }}
+      db_host: ${{ steps.out.outputs.db_host }}
+    defaults:
+      run:
+        working-directory: infra/main
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+          # The ECR URL contains the account id; masked, GitHub would drop the
+          # job output that carries it. An account id is not a secret.
+          mask-aws-account-id: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_wrapper: false # keeps `terraform output -raw` clean
+
+      # The state bucket is created once by infra/bootstrap and named after
+      # the account.
+      - name: terraform init
+        run: |
+          account=$(aws sts get-caller-identity --query Account --output text)
+          terraform init -input=false -backend-config="bucket=oficina-api-tfstate-${account}"
+
+      - name: terraform apply
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+        run: terraform apply -input=false -auto-approve
+
+      - name: Read outputs
+        id: out
+        run: |
+          for name in cluster_name ecr_repository_url db_host; do
+            echo "${name}=$(terraform output -raw ${name})" >> "$GITHUB_OUTPUT"
+          done
+
+  image:
+    needs: infrastructure
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      # Tagged with the commit: the repository's tags are immutable, so what
+      # runs in the cluster always names exactly the code it came from.
+      - name: Build and push
+        env:
+          IMAGE: ${{ needs.infrastructure.outputs.ecr_repository_url }}:${{ github.sha }}
+        run: |
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+  deploy:
+    needs: [ infrastructure, image ]
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLUSTER: ${{ needs.infrastructure.outputs.cluster_name }}
+      IMAGE_REPO: ${{ needs.infrastructure.outputs.ecr_repository_url }}
+      DB_HOST: ${{ needs.infrastructure.outputs.db_host }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: kubeconfig
+        run: aws eks update-kubeconfig --name "$CLUSTER" --region "$AWS_REGION"
+
+      # The load balancer's address goes into the e-mails (PUBLIC_URL), so the
+      # Service comes first and the rest waits for its hostname.
+      - name: Load balancer
+        id: lb
+        run: |
+          kubectl apply -f k8s/base/namespace.yaml
+          kubectl -n "$NAMESPACE" apply -f k8s/base/api-service.yaml
+          for _ in $(seq 1 60); do
+            host=$(kubectl -n "$NAMESPACE" get svc oficina-api -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+            [ -n "$host" ] && break
+            sleep 5
+          done
+          [ -n "$host" ] || { echo "::error::the load balancer got no hostname in 5 minutes"; exit 1; }
+          echo "host=$host" >> "$GITHUB_OUTPUT"
+
+      # Built here, not committed: it carries this run's image tag, the RDS
+      # endpoint and the load balancer's address.
+      - name: AWS overlay
+        env:
+          PUBLIC_URL: http://${{ steps.lb.outputs.host }}
+        run: |
+          mkdir -p k8s/aws
+          cat > k8s/aws/kustomization.yaml <<EOF
+          apiVersion: kustomize.config.k8s.io/v1beta1
+          kind: Kustomization
+          namespace: ${NAMESPACE}
+          resources:
+            - ../base
+          images:
+            - name: oficina-api
+              newName: ${IMAGE_REPO}
+              newTag: ${GITHUB_SHA}
+          patches:
+            - target: { kind: ConfigMap, name: oficina-api-config }
+              patch: |-
+                - { op: replace, path: /data/POSTGRES_HOST, value: "${DB_HOST}" }
+                - { op: replace, path: /data/PUBLIC_URL, value: "${PUBLIC_URL}" }
+          EOF
+          kubectl kustomize k8s/aws > rendered.yaml
+
+      - name: Secret
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          QUOTE_WEBHOOK_SECRET: ${{ secrets.QUOTE_WEBHOOK_SECRET }}
+        run: |
+          kubectl -n "$NAMESPACE" create secret generic oficina-api-secrets \
+            --from-literal=POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+            --from-literal=SECRET_KEY_BASE="$SECRET_KEY_BASE" \
+            --from-literal=JWT_SECRET="$JWT_SECRET" \
+            --from-literal=QUOTE_WEBHOOK_SECRET="$QUOTE_WEBHOOK_SECRET" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # "Deploy of the database" (schema part): the migrations run once, with
+      # the new image, before any new pod starts. A Job's template cannot be
+      # changed, so the previous run's Job is removed first.
+      - name: Migrate
+        run: |
+          yq 'select(.kind == "ConfigMap")' rendered.yaml | kubectl apply -f -
+          kubectl -n "$NAMESPACE" delete job oficina-migrate --ignore-not-found --wait
+          yq 'select(.kind == "Job")' rendered.yaml | kubectl apply -f -
+          if ! kubectl -n "$NAMESPACE" wait --for=condition=complete job/oficina-migrate --timeout=300s; then
+            kubectl -n "$NAMESPACE" logs job/oficina-migrate --tail=100 || true
+            exit 1
+          fi
+
+      - name: Roll out
+        run: |
+          kubectl apply -f rendered.yaml
+          for deploy in oficina-api oficina-worker; do
+            if ! kubectl -n "$NAMESPACE" rollout status deploy/$deploy --timeout=300s; then
+              # The schema stays migrated: migrations are written to be
+              # compatible with the previous release.
+              kubectl -n "$NAMESPACE" rollout undo deploy/oficina-api
+              kubectl -n "$NAMESPACE" rollout undo deploy/oficina-worker
+              exit 1
+            fi
+          done
+
+      - name: Summary
+        run: |
+          {
+            echo "## Deployed ${GITHUB_SHA::7}"
+            echo "- API: http://${{ steps.lb.outputs.host }}/api/v1 (Swagger: /api-docs)"
+            echo "- Mailpit: \`kubectl -n ${NAMESPACE} port-forward svc/mailpit 8025\`"
+            echo '```'
+            kubectl -n "$NAMESPACE" get pods,hpa
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

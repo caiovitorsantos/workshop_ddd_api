@@ -13,14 +13,17 @@
 #
 # The full environment (API + PostgreSQL) comes up with `docker compose up`.
 
-ARG RUBY_VERSION=3.3.8
+ARG RUBY_VERSION=3.3.13
 
 # --- Shared base -------------------------------------------------------------
 FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
 
 WORKDIR /rails
 
+# `upgrade` pulls the Debian security fixes released after the base image was
+# built (Trivy flags them otherwise).
 RUN apt-get update -qq && \
+    apt-get upgrade -y && \
     apt-get install --no-install-recommends -y curl libjemalloc2 libpq5 postgresql-client && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives

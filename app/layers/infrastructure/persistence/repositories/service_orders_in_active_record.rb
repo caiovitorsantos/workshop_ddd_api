@@ -81,8 +81,14 @@ module Infrastructure
         end
 
         def list(page: 1, per_page: 25, status: nil, customer_id: nil)
-          scope = with_items.order(opened_at: :desc)
-          scope = scope.where(status: status.to_s) if status.present?
+          # An explicit status filter still reaches finished orders; without
+          # one, the listing is the work queue (in_order_of filters and ranks).
+          scope = if status.present?
+            with_items.where(status: status.to_s)
+          else
+            with_items.in_order_of(:status, Domain::Workshop::OrderStatus::LISTING_PRIORITY.map(&:to_s))
+          end
+          scope = scope.order(opened_at: :asc)
           scope = scope.where(customer_id: customer_id) if customer_id.present?
 
           total    = scope.count

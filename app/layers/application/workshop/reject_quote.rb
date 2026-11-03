@@ -10,7 +10,7 @@ module Application
     class RejectQuote < ReleasingOrderCommand
       private
 
-      def apply(order) = order.reject_quote!(reason: reason)
+      def apply(order, reason) = order.reject_quote!(reason: reason)
     end
   end
 end

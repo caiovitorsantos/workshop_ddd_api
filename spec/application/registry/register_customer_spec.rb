@@ -17,8 +17,8 @@ RSpec.describe Application::Registry::RegisterCustomer do
   end
 
   it "registers a customer with a valid tax id" do
-    result = described_class.call(
-      repository: repository, tax_id: "529.982.247-25", name: "Maria Souza"
+    result = described_class.new(customers: repository).call(
+      tax_id: "529.982.247-25", name: "Maria Souza"
     )
 
     expect(result).to be_success
@@ -27,8 +27,8 @@ RSpec.describe Application::Registry::RegisterCustomer do
   end
 
   it "returns a failure instead of raising when the tax id is invalid" do
-    result = described_class.call(
-      repository: repository, tax_id: "111.111.111-11", name: "Fraude"
+    result = described_class.new(customers: repository).call(
+      tax_id: "111.111.111-11", name: "Fraude"
     )
 
     expect(result).to be_failure
@@ -38,10 +38,10 @@ RSpec.describe Application::Registry::RegisterCustomer do
   end
 
   it "refuses a duplicate tax id" do
-    described_class.call(repository: repository, tax_id: "52998224725", name: "Maria")
+    described_class.new(customers: repository).call(tax_id: "52998224725", name: "Maria")
 
-    result = described_class.call(
-      repository: repository, tax_id: "529.982.247-25", name: "Maria de novo"
+    result = described_class.new(customers: repository).call(
+      tax_id: "529.982.247-25", name: "Maria de novo"
     )
 
     expect(result).to be_failure
@@ -50,7 +50,7 @@ RSpec.describe Application::Registry::RegisterCustomer do
   end
 
   it "rejects a customer without a name" do
-    result = described_class.call(repository: repository, tax_id: "52998224725", name: "")
+    result = described_class.new(customers: repository).call(tax_id: "52998224725", name: "")
 
     expect(result).to be_failure
     expect(result.error).to match(/name is required/)

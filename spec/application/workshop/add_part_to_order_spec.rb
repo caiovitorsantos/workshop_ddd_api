@@ -5,18 +5,20 @@ require "rails_helper"
 # repositories and PostgreSQL — the reservation and the order line land in one
 # transaction, and a rollback has to undo both.
 RSpec.describe Application::Workshop::AddPartToOrder do
+  subject(:use_case) do
+    described_class.new(orders: orders, parts: parts, transaction: transaction, events: events)
+  end
+
   def draft_order
     vehicle = create_vehicle
     must_succeed(
-      Application::Workshop::OpenServiceOrder.call(
-        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: vehicle.id
-      )
+      open_order_for(vehicle)
     )
   end
 
   def add(order, part, quantity)
-    described_class.call(
-      orders: orders, parts: parts, id: order.id, part_id: part.id, quantity: quantity
+    use_case.call(
+      id: order.id, part_id: part.id, quantity: quantity
     )
   end
 
@@ -65,6 +67,18 @@ RSpec.describe Application::Workshop::AddPartToOrder do
       expect(parts.find(part.id).quantity_reserved).to eq(0)
     end
 
+    # The part does record InsufficientStockDetected before refusing, but the
+    # command failed and its unit of work rolled back: events are published
+    # only for work that was kept.
+    it "publishes nothing" do
+      part  = create_part(on_hand: 2)
+      order = draft_order
+
+      add(order, part, 3)
+
+      expect(events.published).to be_empty
+    end
+
     it "counts stock already reserved by the same order" do
       part  = create_part(on_hand: 4)
       order = draft_order
@@ -90,8 +104,8 @@ RSpec.describe Application::Workshop::AddPartToOrder do
     it "reports a missing order" do
       part = create_part
 
-      result = described_class.call(
-        orders: orders, parts: parts, id: 999_999, part_id: part.id, quantity: 1
+      result = use_case.call(
+        id: 999_999, part_id: part.id, quantity: 1
       )
 
       expect(result).to be_failure
@@ -101,8 +115,8 @@ RSpec.describe Application::Workshop::AddPartToOrder do
     it "reports a missing part" do
       order = draft_order
 
-      result = described_class.call(
-        orders: orders, parts: parts, id: order.id, part_id: 999_999, quantity: 1
+      result = use_case.call(
+        id: order.id, part_id: 999_999, quantity: 1
       )
 
       expect(result).to be_failure

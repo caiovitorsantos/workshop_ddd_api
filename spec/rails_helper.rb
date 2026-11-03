@@ -56,6 +56,13 @@ RSpec.configure do |config|
   config.filter_rails_from_backtrace!
 
   config.include FactoryBot::Syntax::Methods
+
+  # Every use case now queues e-mails; without this, one example's jobs would
+  # satisfy (or break) the next one's `have_been_enqueued`.
+  config.before do
+    ActiveJob::Base.queue_adapter.enqueued_jobs.clear
+    ActionMailer::Base.deliveries.clear
+  end
 end
 
 Shoulda::Matchers.configure do |config|

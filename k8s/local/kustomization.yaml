@@ -1,0 +1,22 @@
+# Local overlay: the base plus what AWS provides and kind does not — a
+# database and the Secret (here with throwaway development values).
+#
+#   docker build -t oficina-api:local . && kind load docker-image oficina-api:local
+#   kubectl apply -k k8s/local
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: oficina
+resources:
+  - ../base
+  - postgres.yaml
+secretGenerator:
+  - name: oficina-api-secrets
+    literals:
+      - POSTGRES_PASSWORD=local-only-password
+      - SECRET_KEY_BASE=local-only-secret-key-base-0123456789abcdef0123456789abcdef
+      - JWT_SECRET=local-only-jwt-secret
+      - QUOTE_WEBHOOK_SECRET=local-only-webhook-secret
+images:
+  - name: oficina-api
+    newName: oficina-api
+    newTag: local

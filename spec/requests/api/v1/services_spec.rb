@@ -97,15 +97,28 @@ RSpec.describe "api/v1/services", type: :request do
 
     it "refuses to add a retired service to an order" do
       retired = create_service(active: false)
-      order   = Application::Workshop::OpenServiceOrder.call(
-        orders: orders, vehicles: vehicles, customers: customers, vehicle_id: create_vehicle.id
-      ).value
+      order   = open_order_for(create_vehicle).value
 
       post "/api/v1/service_orders/#{order.id}/add_service",
            params: { item: { service_id: retired.id } }, headers: auth_headers
 
       expect(response).to have_http_status(:unprocessable_entity)
       expect(JSON.parse(response.body)["error"]).to match(/no longer offered/)
+    end
+  end
+
+  describe "renaming" do
+    # The unique index on the name is the guard; the adapter turns its answer
+    # into the domain's AlreadyExists, so this is a 409 rather than a 500.
+    it "refuses to rename a service to a name already in the catalog" do
+      create_service(name: "Alinhamento")
+      service = create_service(name: "Balanceamento")
+
+      patch "/api/v1/services/#{service.id}",
+            params: { service: { name: "Alinhamento" } }, headers: auth_headers
+
+      expect(response).to have_http_status(:conflict)
+      expect(JSON.parse(response.body)["error"]).to match(/already in the catalog/)
     end
   end
 

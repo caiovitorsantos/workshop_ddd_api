@@ -24,6 +24,7 @@ module Application
         when Domain::Shared::Errors::InvalidValue      then :invalid_value
         when Domain::Shared::Errors::InvalidTransition then :invalid_transition
         when Domain::Shared::Errors::AlreadyExists     then :already_exists
+        when Domain::Shared::Errors::InUse             then :in_use
         else :business_rule_violation
         end
 
