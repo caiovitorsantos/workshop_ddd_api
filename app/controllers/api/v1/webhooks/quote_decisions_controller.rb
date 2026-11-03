@@ -19,10 +19,14 @@ module Api
         before_action :verify_signature
 
         def create
+          # Only the signed bytes: `params` would also merge the query string,
+          # which the signature does not cover.
+          signed = ActionController::Parameters.new(request.request_parameters)
+
           result = container.decide_quote.call(
-            order_number: params.require(:order_number),
-            decision: params.require(:decision),
-            reason: params[:reason]
+            order_number: signed.require(:order_number),
+            decision: signed.require(:decision),
+            reason: signed[:reason]
           )
 
           respond_with(result, with: ServiceOrderPresenter.method(:status))

@@ -131,6 +131,18 @@ RSpec.describe "api/v1/webhooks/quote_decisions", type: :request do
       expect(response).to have_http_status(:unauthorized)
     end
 
+    it "reads its input only from the signed body, never the query string" do
+      order = order_awaiting_approval
+      body  = { decision: "approved" }
+
+      post "/api/v1/webhooks/quote_decisions?order_number=#{order.number}",
+           params: body.to_json,
+           headers: { "Content-Type" => "application/json", "X-Signature" => sign(body.to_json) }
+
+      expect(response).to have_http_status(:bad_request)
+      expect(orders.find(order.id).status).to be_awaiting_approval
+    end
+
     it "refuses a request without a signature" do
       decide({ order_number: "OS-000001", decision: "approved" }, signature: nil)
 
