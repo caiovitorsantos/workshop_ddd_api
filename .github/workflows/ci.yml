@@ -1,9 +1,10 @@
 name: CI
 
+# Pull requests run it directly; on main it runs as the first stage of cd.yml
+# (workflow_call), so a push to main is tested once and deploys only if green.
 on:
   pull_request:
-  push:
-    branches: [ main ]
+  workflow_call:
 
 jobs:
   scan_ruby:
@@ -103,3 +104,45 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+
+  # The production image builds, and carries no CRITICAL vulnerability with a
+  # fix available. HIGH ones are listed in the run summary without failing:
+  # some sit in binaries we do not build (Thruster's Go runtime) and can only
+  # wait for an upstream release.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build the production image
+        run: docker build -t oficina-api:${{ github.sha }} .
+
+      - name: Report HIGH vulnerabilities (non-blocking)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: oficina-api:${{ github.sha }}
+          severity: HIGH
+          ignore-unfixed: true
+          format: table
+          output: trivy-high.txt
+          exit-code: "0"
+
+      - name: Fail on CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: oficina-api:${{ github.sha }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-setup-trivy: true
+
+      - name: Write run summary
+        if: always()
+        run: |
+          {
+            echo "## Image scan (Trivy, HIGH, fixed upstream)"
+            echo '```'
+            cat trivy-high.txt 2>/dev/null || echo "(no report)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
