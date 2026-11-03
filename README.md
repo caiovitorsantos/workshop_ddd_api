@@ -451,15 +451,15 @@ kubectl -n oficina get hpa -w                              # réplicas sob carga
 
 | Diretório | O que cria |
 | --- | --- |
-| `infra/bootstrap` | o bucket S3 do estado (versionado, criptografado, privado). Roda **uma vez**, local |
+| `infra/bootstrap.sh` | o bucket S3 do estado (versionado, criptografado, privado). Roda **uma vez** por conta. É um script do AWS CLI, e não Terraform, porque a política da Academy proíbe uma leitura que o provider faz em todo bucket |
 | `infra/main/modules/network` | VPC, 2 subnets públicas e 2 privadas em zonas distintas, internet gateway |
-| `infra/main/modules/eks` | cluster EKS e node group (1 a 3 × t3.medium) com a `LabRole`, add-on metrics-server, IMDSv2 obrigatório nos nós |
+| `infra/main/modules/eks` | cluster EKS 1.35 e node group (1 a 3 × t3.medium) com a `LabRole`, add-on metrics-server, IMDSv2 obrigatório nos nós |
 | `infra/main/modules/database` | RDS PostgreSQL 17 (db.t3.micro) nas subnets privadas, porta 5432 aberta só para o cluster |
 | `infra/main/modules/registry` | repositório ECR com tags imutáveis, guardando as 10 últimas imagens |
 
 ```bash
-cd infra/bootstrap && terraform init && terraform apply     # uma vez por conta
-cd ../main
+infra/bootstrap.sh                                            # uma vez por conta
+cd infra/main
 terraform init -backend-config="bucket=oficina-api-tfstate-<account-id>"
 TF_VAR_db_password=... terraform apply
 ```
@@ -564,7 +564,7 @@ spec/                            domain/ · application/ · infrastructure/ · j
 swagger/v1/swagger.yaml          gerado a partir dos specs
 postman/                         collection exportada do Swagger
 k8s/                             base/ (cluster) · local/ (kind)
-infra/                           bootstrap/ (estado) · main/ (VPC, EKS, RDS, ECR)
+infra/                           bootstrap.sh (estado) · main/ (VPC, EKS, RDS, ECR)
 .github/workflows/               ci · cd · destroy · security
 ```
 
