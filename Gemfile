@@ -24,7 +24,7 @@ group :development, :test do
   gem "rspec-rails", "~> 8.0"
   gem "rswag-specs", "~> 2.16"
   gem "factory_bot_rails", "~> 6.5"
-  gem "shoulda-matchers", "~> 6.5"
+  gem "shoulda-matchers", "~> 8.0"
   gem "simplecov", require: false
 
   # Static security analysis — feeds the Phase 1 vulnerability report.
