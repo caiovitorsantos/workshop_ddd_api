@@ -1,0 +1,28 @@
+# Solid Queue worker: sends the customer e-mails. Same image as the API, no
+# Service — nothing calls it; it polls the jobs table.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oficina-worker
+  labels: { app: oficina-worker }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: oficina-worker }
+  template:
+    metadata:
+      labels: { app: oficina-worker }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: worker
+          image: oficina-api
+          command: [ "bin/jobs" ]
+          envFrom:
+            - configMapRef: { name: oficina-api-config }
+            - secretRef: { name: oficina-api-secrets }
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { cpu: 500m, memory: 768Mi }

@@ -1,0 +1,11 @@
+# On EKS this provisions an AWS load balancer; in kind it stays <pending> and
+# the API is reached with `kubectl port-forward`.
+apiVersion: v1
+kind: Service
+metadata:
+  name: oficina-api
+spec:
+  type: LoadBalancer
+  selector: { app: oficina-api }
+  ports:
+    - { name: http, port: 80, targetPort: http }
