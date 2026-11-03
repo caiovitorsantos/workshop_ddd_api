@@ -22,8 +22,12 @@ git clone <url-do-repositorio> && cd workshop_ddd_api
 docker compose up --build
 ```
 
-Isso sobe PostgreSQL e a API. O banco é criado e migrado automaticamente na
-subida (`bin/docker-entrypoint`). Para popular com dados de demonstração:
+Isso sobe PostgreSQL, a API, o worker de jobs (Solid Queue, `bin/jobs`) e o
+Mailpit, que recebe os e-mails enviados aos clientes. Em desenvolvimento o banco
+é criado e migrado automaticamente na subida (`bin/docker-entrypoint`); em
+produção não: lá a migração roda uma vez, como Job do Kubernetes.
+
+Para popular com dados de demonstração:
 
 ```bash
 docker compose exec api bin/rails db:seed
@@ -34,6 +38,7 @@ docker compose exec api bin/rails db:seed
 | API                | http://localhost:3000/api/v1       |
 | Swagger UI         | http://localhost:3000/api-docs     |
 | Health check       | http://localhost:3000/up           |
+| E-mails (Mailpit)  | http://localhost:8025              |
 
 Usuários criados pelo seed (senha `oficina123`, configurável via `SEED_PASSWORD`):
 

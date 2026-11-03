@@ -1,10 +1,20 @@
 #!/bin/bash -e
 
-# Prepare the database before starting the server: create it if missing, then
-# run pending migrations. Covers both the production CMD (bin/thrust bin/rails
-# server) and the development one (bin/rails server -b 0.0.0.0 -p 3000), which
-# is why the check looks for "server" anywhere in the arguments.
-if [[ " $* " == *" server "* ]]; then
+# Development only: docker-compose keeps the gems in a named volume, which
+# shadows the ones baked into the image — so after a Gemfile change the volume
+# is stale. Install whatever is missing before anything boots Bundler.
+if [[ "${RAILS_ENV}" != "production" ]]; then
+  bundle check >/dev/null || bundle install
+fi
+
+# Development only: create the database if missing and run pending migrations
+# before the server starts. "server" is matched anywhere in the arguments so it
+# covers `bin/rails server -b 0.0.0.0 -p 3000` and `bin/thrust bin/rails server`.
+#
+# Production never migrates here. In the cluster several replicas start at
+# once and must not race each other on the schema; migrations run once, as a
+# Kubernetes Job (`bin/rails db:migrate`), before the new pods roll out.
+if [[ "${RAILS_ENV}" != "production" && " $* " == *" server "* ]]; then
   ./bin/rails db:prepare
 fi
 
