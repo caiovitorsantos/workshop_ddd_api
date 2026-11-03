@@ -10,8 +10,9 @@ variable "project" {
 }
 
 variable "kubernetes_version" {
-  type    = string
-  default = "1.33"
+  description = "Keep it in EKS standard support: extended support bills the control plane 6x."
+  type        = string
+  default     = "1.35"
 }
 
 variable "node_instance_type" {
