@@ -33,3 +33,5 @@
 # Ignore Docker-related files
 /.dockerignore
 /Dockerfile*
+/infra
+/k8s

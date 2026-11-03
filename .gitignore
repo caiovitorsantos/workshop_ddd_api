@@ -30,3 +30,10 @@
 /tmp/security
 
 .DS_Store
+
+# Terraform: providers and state never go to git (state holds the DB password).
+# The provider lock files (.terraform.lock.hcl) are committed on purpose.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
