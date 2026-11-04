@@ -494,6 +494,22 @@ Secrets do environment `production` no GitHub: `AWS_ACCESS_KEY_ID`,
 `~/.aws/credentials`),
 `DB_PASSWORD`, `SECRET_KEY_BASE`, `JWT_SECRET` e `QUOTE_WEBHOOK_SECRET`.
 
+### Escalabilidade (HPA)
+
+`infra/load-test.sh` gera carga de dentro do cluster: um pod faz login como
+gerente e dispara clientes em paralelo contra `GET /api/v1/service_orders`
+(Rails + PostgreSQL), mostrando o HPA a cada 15 s. Ao terminar, apaga o pod e o
+Secret temporário que levou a senha.
+
+```bash
+infra/load-test.sh                        # 3 min, 8 clientes
+DURATION=300 WORKERS=12 infra/load-test.sh
+kubectl -n oficina get pods -l app=oficina-api -w   # noutro terminal
+```
+
+No EKS, com 8 clientes, a CPU foi a 154% do alvo e a API subiu de 2 para 5
+réplicas em ~50 s; sem carga, volta a 2 depois da janela de estabilização (~5 min).
+
 ---
 
 ## Segurança

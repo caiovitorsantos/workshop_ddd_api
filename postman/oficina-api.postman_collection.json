@@ -20,6 +20,57 @@
   ],
   "item": [
     {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Signs in and returns a JWT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "session"
+              ],
+              "variable": [],
+              "query": []
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"gerente@oficina.local\",\n  \"password\": \"oficina123\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Saves the JWT for every other request.",
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('bearerToken', pm.response.json().token);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "name": "Customers",
       "item": [
         {
@@ -1007,57 +1058,6 @@
               ]
             }
           }
-        }
-      ]
-    },
-    {
-      "name": "Authentication",
-      "item": [
-        {
-          "name": "Signs in and returns a JWT",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/session",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "session"
-              ],
-              "variable": [],
-              "query": []
-            },
-            "auth": {
-              "type": "noauth"
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"gerente@oficina.local\",\n  \"password\": \"oficina123\"\n}"
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "// Saves the JWT for every other request.",
-                  "if (pm.response.code === 200) {",
-                  "  pm.collectionVariables.set('bearerToken', pm.response.json().token);",
-                  "}"
-                ]
-              }
-            }
-          ]
         }
       ]
     },

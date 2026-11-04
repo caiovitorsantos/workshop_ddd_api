@@ -30,7 +30,7 @@ namespace :postman do
     scripts = {
       [ "post", "/api/v1/session" ] => [ "test", [
         "// Saves the JWT for every other request.",
-        "if (pm.response.code === 200) {",
+        "if (pm.response.code === 201) {",
         "  pm.collectionVariables.set('bearerToken', pm.response.json().token);",
         "}"
       ] ],
@@ -91,7 +91,7 @@ namespace :postman do
         { key: "bearerToken", value: "" },
         { key: "webhookSecret", value: "development-only-webhook-secret" }
       ],
-      item: folders.values
+      item: folders.values.partition { |f| f[:name] == "Authentication" }.flatten(1) # login runs first
     }
 
     out = Rails.root.join("postman/oficina-api.postman_collection.json")
