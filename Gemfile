@@ -6,7 +6,7 @@ gem "puma", ">= 5.0"
 
 # Infrastructure layer: authentication for the administrative APIs.
 gem "bcrypt", "~> 3.1.7"
-gem "jwt", "~> 3.1"
+gem "jwt", "~> 3.3"
 
 # Interface layer: OpenAPI/Swagger documentation generated from the specs.
 gem "rswag-api", "~> 2.16"
