@@ -21,7 +21,7 @@ gem "thruster", require: false
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 
-  gem "rspec-rails", "~> 8.0"
+  gem "rspec-rails", "~> 8.1"
   gem "rswag-specs", "~> 2.16"
   gem "factory_bot_rails", "~> 6.5"
   gem "shoulda-matchers", "~> 6.5"
